@@ -20,10 +20,11 @@ import {
   type MdeDurationPredictorFormValues, 
   type MdeDurationPredictorResultRow,
   type ExcelDataRow,
+  type SampleSizeToMdeFormValues, // For calling the action
 } from "@/lib/types";
-import { calculateSampleSizeAction } from "@/actions/ab-analytics-actions";
+import { calculateSampleSizeAction, calculateMdeFromSampleSizeAction } from "@/actions/ab-analytics-actions";
 import { useState, useEffect } from "react";
-import { Loader2, SettingsIcon, Download, AlertTriangle } from "lucide-react"; // Added AlertTriangle
+import { Loader2, SettingsIcon, Download, AlertTriangle, Info } from "lucide-react"; 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
@@ -34,7 +35,8 @@ import {
   DEFAULT_STATISTICAL_POWER, 
   DEFAULT_SIGNIFICANCE_LEVEL, 
   METRIC_TYPE_OPTIONS,
-  PREDICTION_DURATIONS
+  PREDICTION_DURATIONS,
+  DEFAULT_SAMPLE_SIZE_PER_VARIANT
 } from "@/lib/constants";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -49,11 +51,12 @@ interface MdeDurationPredictorFormProps {
 export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurationPredictorFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [parsedExcelData, setParsedExcelData] = useState<ExcelDataRow[] | null>(null);
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   
   const [availableMetrics, setAvailableMetrics] = useState<string[]>(DEFAULT_METRIC_OPTIONS);
   const [availableRealEstates, setAvailableRealEstates] = useState<string[]>(DEFAULT_REAL_ESTATE_OPTIONS);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+  const [activeInputField, setActiveInputField] = useState<'mde' | 'sampleSize' | null>(null);
+
 
   const { toast } = useToast();
 
@@ -63,7 +66,8 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
       metric: '',
       realEstate: 'platform',
       metricType: METRIC_TYPE_OPTIONS[1], 
-      minimumDetectableEffect: DEFAULT_MDE_PERCENT,
+      minimumDetectableEffect: undefined, 
+      sampleSizePerVariant: undefined,
       statisticalPower: DEFAULT_STATISTICAL_POWER,
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
       numberOfVariants: 2,
@@ -71,15 +75,15 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
   });
 
   const selectedMetric = form.watch("metric");
+  const mdeValue = form.watch("minimumDetectableEffect");
+  const sampleSizeValue = form.watch("sampleSizePerVariant");
 
   useEffect(() => {
     const storedData = localStorage.getItem('abalyticsMappedData');
-    const storedFileName = localStorage.getItem('abalyticsFileName');
     if (storedData) {
       try {
         const data: ExcelDataRow[] = JSON.parse(storedData);
         setParsedExcelData(data);
-        if(storedFileName) setUploadedFileName(storedFileName);
 
         const uniqueMetrics = Array.from(new Set(data.map(row => row.metric).filter(Boolean) as string[]));
         setAvailableMetrics(uniqueMetrics.length > 0 ? uniqueMetrics : DEFAULT_METRIC_OPTIONS);
@@ -89,14 +93,12 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
       } catch (e) { 
           console.error("Failed to parse stored data:", e); 
           setParsedExcelData(null); 
-          setUploadedFileName(null);
           setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
           form.resetField("metric");
         }
     } else {
         setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
         setParsedExcelData(null);
-        setUploadedFileName(null);
     }
   }, [form]);
 
@@ -119,6 +121,27 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     }
   }, [parsedExcelData, selectedMetric, form]);
   
+  const handleMdeFocus = () => setActiveInputField('mde');
+  const handleSampleSizeFocus = () => setActiveInputField('sampleSize');
+
+  const handleMdeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    form.setValue("minimumDetectableEffect", value === "" ? undefined : Number(value), {shouldValidate: true});
+    if (value !== "" && activeInputField === 'mde') {
+      form.setValue("sampleSizePerVariant", undefined, {shouldValidate: false}); 
+    }
+    onResults(null);
+  };
+
+  const handleSampleSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    form.setValue("sampleSizePerVariant", value === "" ? undefined : Number(value), {shouldValidate: true});
+    if (value !== "" && activeInputField === 'sampleSize') {
+      form.setValue("minimumDetectableEffect", undefined, {shouldValidate: false}); 
+    }
+    onResults(null);
+  };
+
   async function onSubmit(values: MdeDurationPredictorFormValues) {
     if (!parsedExcelData || parsedExcelData.length === 0) {
         toast({
@@ -135,6 +158,9 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     const aggregatedResults: MdeDurationPredictorResultRow[] = [];
     let allCalculationWarnings: string[] = []; 
 
+    const calculationMode: 'mdeToSs' | 'ssToMde' = 
+        (values.minimumDetectableEffect && values.minimumDetectableEffect > 0) ? 'mdeToSs' : 'ssToMde';
+
     for (const duration of PREDICTION_DURATIONS) {
       let meanForCalc: number | undefined = undefined;
       let varianceForCalc: number | undefined = undefined;
@@ -144,7 +170,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
       const matchedRow = parsedExcelData.find(row => 
         row.metric === values.metric &&
         row.realEstate === values.realEstate &&
-        row.lookbackDays == duration && // Ensure lookbackDays matches the current duration
+        row.lookbackDays == duration && 
         row.mean !== undefined && !isNaN(Number(row.mean)) &&
         row.variance !== undefined && !isNaN(Number(row.variance)) &&
         row.totalUsers !== undefined && !isNaN(Number(row.totalUsers))
@@ -158,67 +184,81 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
         rowSpecificWarnings.push(`Data_not_found_in_uploaded_file_for_${duration}-day_duration.`);
       }
       
-      if (meanForCalc !== undefined && varianceForCalc !== undefined) { // Only proceed if mean/variance found
+      let rowResult: Partial<MdeDurationPredictorResultRow> = { duration, calculationMode, totalUsersAvailable: totalUsersForDuration };
+
+      if (meanForCalc !== undefined && varianceForCalc !== undefined) {
         try {
-          const actionInput = {
-            metric: values.metric, // Passed for context
-            metricType: values.metricType,
-            mean: meanForCalc,
-            variance: varianceForCalc,
-            minimumDetectableEffect: values.minimumDetectableEffect, 
-            statisticalPower: values.statisticalPower,
-            significanceLevel: values.significanceLevel,
-            numberOfVariants: values.numberOfVariants,
-            realEstate: values.realEstate, // Passed for context
-            targetExperimentDurationDays: duration,
-            totalUsersInSelectedDuration: totalUsersForDuration, // This can be undefined if not found
-          };
-
-          // This result is MdeToSampleSizeCalculationResults
-          const result = await calculateSampleSizeAction(actionInput as any); // Cast as any to satisfy MdeToSampleSizeFormValues temporarily
-          
-          aggregatedResults.push({
-            duration,
-            totalUsersAvailable: totalUsersForDuration, // Use found or undefined
-            totalRequiredSampleSize: result.requiredSampleSizePerVariant && values.numberOfVariants ? result.requiredSampleSizePerVariant * values.numberOfVariants : undefined,
-            exposureNeededPercentage: result.exposureNeededPercentage,
-            warnings: [...rowSpecificWarnings, ...(result.warnings || [])], 
-          });
-          if (result.warnings) allCalculationWarnings.push(...result.warnings.map(w => `${duration}-day: ${w.replace(/_/g, ' ')}`));
-
+          if (calculationMode === 'mdeToSs' && values.minimumDetectableEffect) {
+            const actionInput = {
+              metric: values.metric, 
+              metricType: values.metricType,
+              mean: meanForCalc,
+              variance: varianceForCalc,
+              minimumDetectableEffect: values.minimumDetectableEffect, 
+              statisticalPower: values.statisticalPower,
+              significanceLevel: values.significanceLevel,
+              numberOfVariants: values.numberOfVariants,
+              realEstate: values.realEstate, 
+              targetExperimentDurationDays: duration,
+              totalUsersInSelectedDuration: totalUsersForDuration,
+            };
+            const result = await calculateSampleSizeAction(actionInput as any);
+            rowResult.totalRequiredSampleSize = result.requiredSampleSizePerVariant && values.numberOfVariants ? result.requiredSampleSizePerVariant * values.numberOfVariants : undefined;
+            rowResult.exposureNeededPercentage = result.exposureNeededPercentage;
+            if (result.warnings) {
+                rowSpecificWarnings.push(...result.warnings);
+                allCalculationWarnings.push(...result.warnings.map(w => `${duration}-day: ${w.replace(/_/g, ' ')}`));
+            }
+          } else if (calculationMode === 'ssToMde' && values.sampleSizePerVariant) {
+             const actionInput: SampleSizeToMdeFormValues = {
+                metric: values.metric,
+                metricType: values.metricType,
+                mean: meanForCalc,
+                variance: varianceForCalc,
+                sampleSizePerVariant: values.sampleSizePerVariant,
+                statisticalPower: values.statisticalPower,
+                significanceLevel: values.significanceLevel,
+                numberOfVariants: values.numberOfVariants,
+                realEstate: values.realEstate,
+                targetExperimentDurationDays: duration, // For context in action
+                totalUsersInSelectedDuration: totalUsersForDuration, // Important for exposure calc
+             };
+             const result = await calculateMdeFromSampleSizeAction(actionInput);
+             rowResult.achievableMde = result.achievableMde;
+             rowResult.exposureNeededPercentage = result.exposureNeededPercentage;
+             if (result.warnings) {
+                rowSpecificWarnings.push(...result.warnings);
+                allCalculationWarnings.push(...result.warnings.map(w => `${duration}-day: ${w.replace(/_/g, ' ')}`));
+            }
+          }
         } catch (error) {
           console.error(`Error calculating for duration ${duration}:`, error);
           const errorMsg = `Calculation_error_for_${duration}-day:_${error instanceof Error ? error.message : 'Unknown_error'}`;
-          aggregatedResults.push({
-            duration,
-            totalUsersAvailable: 'Error',
-            totalRequiredSampleSize: 'Error',
-            exposureNeededPercentage: 'Error',
-            warnings: [...rowSpecificWarnings, errorMsg],
-          });
+          rowSpecificWarnings.push(errorMsg);
           allCalculationWarnings.push(errorMsg.replace(/_/g, ' '));
+          if (calculationMode === 'mdeToSs') rowResult.totalRequiredSampleSize = 'Error';
+          else rowResult.achievableMde = 'Error';
+          rowResult.exposureNeededPercentage = 'Error';
         }
-      } else {
-         aggregatedResults.push({
-            duration,
-            totalUsersAvailable: 'N/A',
-            totalRequiredSampleSize: 'N/A',
-            exposureNeededPercentage: 'N/A',
-            warnings: rowSpecificWarnings, 
-          });
-          if (rowSpecificWarnings.length > 0) allCalculationWarnings.push(...rowSpecificWarnings.map(w => `${duration}-day: ${w.replace(/_/g, ' ')}`));
+      } else { // Data not found for mean/variance
+          if (calculationMode === 'mdeToSs') rowResult.totalRequiredSampleSize = 'N/A';
+          else rowResult.achievableMde = 'N/A';
+          rowResult.exposureNeededPercentage = 'N/A';
       }
+      rowResult.warnings = rowSpecificWarnings.length > 0 ? Array.from(new Set(rowSpecificWarnings)) : undefined;
+      aggregatedResults.push(rowResult as MdeDurationPredictorResultRow);
     }
     onResults(aggregatedResults);
     setIsLoading(false);
     
-    if (allCalculationWarnings.length > 0) {
-        const uniqueWarnings = Array.from(new Set(allCalculationWarnings));
-        const warningSummary = uniqueWarnings.slice(0, 2).join('; ') + (uniqueWarnings.length > 2 ? '...' : '');
+    const uniqueWarnings = Array.from(new Set(allCalculationWarnings));
+    if (uniqueWarnings.length > 0) {
+        const warningSummary = uniqueWarnings.slice(0, 1).join('; ') + (uniqueWarnings.length > 1 ? ` and ${uniqueWarnings.length -1} more...` : '');
         toast({ 
-            title: "Dynamic Duration Calculation Complete with Notices", 
-            description: `Some calculations had issues or missing data. ${warningSummary}. Full details in downloaded report.`,
+            title: "Calculation Notices", 
+            description: `Some calculations had issues or missing data: ${warningSummary}. Full details in downloaded report.`,
             duration: 7000,
+            variant: "default"
         });
     } else {
         toast({ title: "Dynamic Duration Calculation Complete", description: "Results table updated below." });
@@ -239,6 +279,12 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
   const clearResultsOnInputChange = () => {
     onResults(null);
   };
+  
+  const calculationTarget = 
+    (activeInputField === 'mde' && mdeValue && mdeValue > 0) || (!activeInputField && mdeValue && mdeValue > 0  && (!sampleSizeValue || sampleSizeValue <=0))? "Sample Size" :
+    (activeInputField === 'sampleSize' && sampleSizeValue && sampleSizeValue > 0) || (!activeInputField && sampleSizeValue && sampleSizeValue > 0 && (!mdeValue || mdeValue <=0)) ? "Achievable MDE" :
+    "Output";
+
 
   return (
     <Card className="w-full shadow-lg">
@@ -246,7 +292,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
         <div>
           <CardTitle className="font-headline text-2xl">Dynamic Duration Calculator</CardTitle>
           <CardDescription>
-            Predict sample size needed across different durations.
+            Predict sample size or MDE needed across different durations.
           </CardDescription>
         </div>
         <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
@@ -338,14 +384,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
                     </Select>
                     <FormMessage />
                   </FormItem>)} />
-                <FormField control={form.control} name="minimumDetectableEffect" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>MDE (%)</FormLabel>
-                    <FormControl><Input type="number" placeholder="e.g., 0.5" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => { field.onChange(Number(e.target.value)); clearResultsOnInputChange(); }} step="any" /></FormControl>
-                    <FormDescription className="text-xs">Minimum change you want to detect.</FormDescription>
-                    <FormMessage />
-                  </FormItem>)} />
-                <FormField control={form.control} name="numberOfVariants" render={({ field }) => (
+                 <FormField control={form.control} name="numberOfVariants" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Number of Variants</FormLabel>
                     <FormControl><Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => { field.onChange(Number(e.target.value)); clearResultsOnInputChange(); }} /></FormControl>
@@ -354,10 +393,63 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
                   </FormItem>)} />
               </div>
 
+              <Separator />
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                    <Info size={16} className="text-primary" />
+                    <span>Enter either MDE (%) or Sample Size to calculate the other across durations.</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                        control={form.control}
+                        name="minimumDetectableEffect"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>MDE (%) <span className="text-xs text-muted-foreground">(Input)</span></FormLabel>
+                            <FormControl>
+                            <Input 
+                                type="number" 
+                                placeholder="e.g., 0.5 for 0.5%" 
+                                {...field} 
+                                value={field.value === undefined ? '' : field.value}
+                                onFocus={handleMdeFocus}
+                                onChange={handleMdeChange}
+                                step="any"
+                                className={cn(activeInputField === 'sampleSize' && field.value === undefined && "bg-muted/50", activeInputField === 'mde' && "border-primary ring-1 ring-primary")}
+                            />
+                            </FormControl>
+                            <FormDescription className="text-xs">Desired minimum change to detect.</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="sampleSizePerVariant"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Sample Size (per variant) <span className="text-xs text-muted-foreground">(Input)</span></FormLabel>
+                            <FormControl>
+                            <Input 
+                                type="number" 
+                                placeholder="e.g., 50000" 
+                                {...field} 
+                                value={field.value === undefined ? '' : field.value}
+                                onFocus={handleSampleSizeFocus}
+                                onChange={handleSampleSizeChange}
+                                className={cn(activeInputField === 'mde' && field.value === undefined && "bg-muted/50", activeInputField === 'sampleSize' && "border-primary ring-1 ring-primary")}
+                            />
+                            </FormControl>
+                            <FormDescription className="text-xs">Available users per variant.</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                </div>
+
               <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <Button type="submit" disabled={isLoading || !parsedExcelData} className="w-full sm:w-auto">
+                <Button type="submit" disabled={isLoading || !parsedExcelData || (!mdeValue && !sampleSizeValue)} className="w-full sm:w-auto">
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Predict Durations
+                  Predict Durations for {calculationTarget}
                 </Button>
                 {currentResults && (
                   <Button type="button" variant="outline" onClick={handleDownloadReport} className="w-full sm:w-auto" disabled={isLoading}>
@@ -381,6 +473,7 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
   if (!results || results.length === 0) {
     return null;
   }
+  const calculationMode = results[0]?.calculationMode; // Assume all rows have same mode
 
  const formatCell = (value: number | string | undefined, isPercentage = false, isLargeNumber = false, precision = isPercentage ? 1 : (isLargeNumber ? 0 : 2) ) => {
     if (value === undefined || value === null) return <span className="text-muted-foreground">-</span>;
@@ -393,7 +486,6 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
     }
     
     if (typeof value === 'number' && isNaN(value)) return <span className="text-muted-foreground">N/A</span>;
-
 
     if (typeof value === 'number') {
       if (isPercentage) {
@@ -410,6 +502,9 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
     <Card className="mt-8 w-full shadow-lg">
       <CardHeader>
         <CardTitle className="font-headline text-2xl">Dynamic Duration Calculator Predictions</CardTitle>
+         <CardDescription>
+          Predictions for {calculationMode === 'ssToMde' ? 'Achievable MDE' : 'Required Sample Size'} across durations.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -418,7 +513,8 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
               <TableRow>
                 <TableHead className="min-w-[100px]">Duration (Days)</TableHead>
                 <TableHead className="min-w-[150px]">Total Users Available</TableHead>
-                <TableHead className="min-w-[180px]">Total Req. Sample Size</TableHead>
+                {calculationMode === 'mdeToSs' && <TableHead className="min-w-[180px]">Total Req. Sample Size</TableHead>}
+                {calculationMode === 'ssToMde' && <TableHead className="min-w-[180px]">Achievable MDE (%)</TableHead>}
                 <TableHead className="min-w-[150px]">Exposure Needed (%)</TableHead>
               </TableRow>
             </TableHeader>
@@ -427,7 +523,8 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
                 <TableRow key={index}>
                   <TableCell className="font-medium">{row.duration}</TableCell>
                   <TableCell>{formatCell(row.totalUsersAvailable, false, true)}</TableCell>
-                  <TableCell>{formatCell(row.totalRequiredSampleSize, false, true)}</TableCell>
+                  {row.calculationMode === 'mdeToSs' && <TableCell>{formatCell(row.totalRequiredSampleSize, false, true)}</TableCell>}
+                  {row.calculationMode === 'ssToMde' && <TableCell>{formatCell(row.achievableMde, true, false, 2)}</TableCell>}
                   <TableCell>{formatCell(row.exposureNeededPercentage, true)}</TableCell>
                 </TableRow>
               ))}

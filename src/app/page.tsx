@@ -36,17 +36,18 @@ export default function ABalyticsPage() {
   };
 
   const handleDownloadMdeDurationPredictorReport = () => {
-    if (mdeDurationPredictorResults && fixedDurationCalculatorResults?.inputs) { 
-        const formValuesForReport = { 
-            metric: fixedDurationCalculatorResults.inputs.metric,
-            realEstate: fixedDurationCalculatorResults.inputs.realEstate,
-            metricType: fixedDurationCalculatorResults.inputs.metricType,
-            minimumDetectableEffect: fixedDurationCalculatorResults.inputs.minimumDetectableEffect || 0, 
-            statisticalPower: fixedDurationCalculatorResults.inputs.statisticalPower,
-            significanceLevel: fixedDurationCalculatorResults.inputs.significanceLevel,
-            numberOfVariants: fixedDurationCalculatorResults.inputs.numberOfVariants,
-        };
-      downloadMdeDurationPredictorReport(formValuesForReport, mdeDurationPredictorResults);
+    if (mdeDurationPredictorResults && mdeDurationPredictorResults.length > 0 && fixedDurationCalculatorResults?.inputs) { 
+        // The fixedDurationCalculatorResults.inputs might not be perfectly analogous
+        // We need the core parameters that were used for the MDE/SS to Duration prediction
+        // Let's assume the MdeDurationPredictorForm itself holds the necessary base input values if results exist
+        // For now, we might need to pass the form values from MdeDurationPredictorForm directly
+        // Or adapt what fixedDurationCalculatorResults.inputs provides if it's generally applicable
+
+        // Simplification: if mdeDurationPredictorResults exist, they should contain enough context or their originating form values.
+        // The download function for mdeDurationPredictorReport now takes the form values directly.
+        // We would need to get the form values that led to mdeDurationPredictorResults.
+        // This part needs careful state management if the download is initiated from here
+        // For now, the download button is within MdeDurationPredictorForm, which has direct access to its form values.
     }
   };
 
@@ -72,11 +73,11 @@ export default function ABalyticsPage() {
 
       <main className="flex-1 container mx-auto p-4 md:p-8">
         <Tabs defaultValue="fixed-duration-calculator" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:w-[500px] mb-6 mx-auto md:mx-0">
-            <TabsTrigger value="fixed-duration-calculator" className="text-sm md:text-base">
+          <TabsList className="grid w-full grid-cols-2 md:w-[600px] mb-6 mx-auto md:mx-0">
+            <TabsTrigger value="fixed-duration-calculator" className="text-sm md:text-base data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <Calculator className="mr-2 h-4 w-4" /> Fixed Duration Calculator
             </TabsTrigger>
-            <TabsTrigger value="dynamic-duration-calculator" className="text-sm md:text-base">
+            <TabsTrigger value="dynamic-duration-calculator" className="text-sm md:text-base data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <Clock className="mr-2 h-4 w-4" /> Dynamic Duration Calculator
             </TabsTrigger>
           </TabsList>
@@ -93,23 +94,14 @@ export default function ABalyticsPage() {
           </TabsContent>
           
           <TabsContent value="dynamic-duration-calculator">
-            <div className="space-y-6">
-              <MdeDurationPredictorForm 
+            <MdeDurationPredictorForm 
                 onResults={handleMdeDurationPredictorResults}
                 currentResults={mdeDurationPredictorResults}
-              />
-              {mdeDurationPredictorResults && <MdeDurationPredictorResultsDisplay results={mdeDurationPredictorResults} />}
-            </div>
+            />
+            {mdeDurationPredictorResults && <MdeDurationPredictorResultsDisplay results={mdeDurationPredictorResults} />}
           </TabsContent>
         </Tabs>
       </main>
-      <footer className="py-6 md:px-8 md:py-0 border-t">
-        <div className="container flex flex-col items-center justify-center gap-4 md:h-20 md:flex-row">
-          <p className="text-sm leading-loose text-muted-foreground text-center">
-            ABalytics - A/B Test Sample Size & Duration Estimator
-          </p>
-        </div>
-      </footer>
     </div>
   );
 }

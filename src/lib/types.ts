@@ -138,7 +138,7 @@ export interface SampleSizeToMdeCalculationResults {
   inputs: SampleSizeToMdeFormValues; 
   achievableMde?: number; // As percentage
   warnings?: string[];
-  exposureNeededPercentage?: number; // Added
+  exposureNeededPercentage?: number; 
 }
 
 
@@ -153,18 +153,19 @@ export const FixedDurationCalculatorFormSchema = z.object({
   totalUsersInSelectedDuration: z.coerce.number({invalid_type_error: "Total users must be a number"}).int().nonnegative("Total users for duration must be a non-negative integer.").optional(),
   numberOfVariants: z.coerce.number().int().min(2, "Must have at least 2 variants").default(2),
   
-  minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).optional(), // MDE as %
-  sampleSizePerVariant: z.coerce.number({invalid_type_error: "Sample size must be a number"}).int().optional(),
+  minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be positive if provided").optional(), // MDE as %
+  sampleSizePerVariant: z.coerce.number({invalid_type_error: "Sample size must be a number"}).int().positive("Sample size must be positive if provided").optional(),
 
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
 }).refine(data => {
     const mdeProvided = typeof data.minimumDetectableEffect === 'number' && data.minimumDetectableEffect > 0;
     const ssProvided = typeof data.sampleSizePerVariant === 'number' && data.sampleSizePerVariant > 0;
+    if (mdeProvided && ssProvided) return false; // Cannot provide both
     return mdeProvided || ssProvided; // At least one must be provided
   }, {
-    message: "Please provide either MDE (%) or Sample Size (per variant) for calculation.",
-    // path: ["minimumDetectableEffect"], // Could target a general form error display if available
+    message: "Please provide either MDE (%) or Sample Size (per variant), but not both.",
+    path: ["minimumDetectableEffect"], 
   })
   .refine(data => {
     if (data.metricType === "Binary") {
@@ -188,7 +189,6 @@ export const FixedDurationCalculatorFormSchema = z.object({
 export type FixedDurationCalculatorFormValues = z.infer<typeof FixedDurationCalculatorFormSchema>;
 
 export interface FixedDurationCalculatorActionInput extends FixedDurationCalculatorFormValues {
-  // calculationMode: 'mdeToSs' | 'ssToMde'; // Mode can be inferred by the action based on inputs
 }
 
 export interface FixedDurationCalculatorResults {
@@ -204,28 +204,38 @@ export interface FixedDurationCalculatorResults {
 }
 
 
-// Schema for "Dynamic Duration Calculator" (formerly MDE to Duration Predictor)
+// Schema for "Dynamic Duration Calculator"
 export const MdeDurationPredictorFormSchema = z.object({
   metric: z.string().min(1, "Metric is required. Please upload an Excel file with historical data."),
   realEstate: z.string().min(1, "Real Estate is required. Please upload an Excel file with historical data.").default("platform"),
   metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }).default(METRIC_TYPE_OPTIONS[1]),
-  minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be positive").default(DEFAULT_MDE_PERCENT),
+  
+  minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be positive if provided").optional(),
+  sampleSizePerVariant: z.coerce.number({invalid_type_error: "Sample size must be a number"}).int().positive("Sample size must be positive if provided").optional(),
+
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
   numberOfVariants: z.coerce.number().int().min(2, "Must have at least 2 variants").default(2),
-});
+}).refine(data => {
+    const mdeProvided = typeof data.minimumDetectableEffect === 'number' && data.minimumDetectableEffect > 0;
+    const ssProvided = typeof data.sampleSizePerVariant === 'number' && data.sampleSizePerVariant > 0;
+    if (mdeProvided && ssProvided) return false; // Cannot provide both for calculation
+    return mdeProvided || ssProvided; // At least one must be provided for calculation
+  }, {
+    message: "Please provide either MDE (%) or Sample Size (per variant), but not both.",
+    path: ["minimumDetectableEffect"], 
+  });
 
 export type MdeDurationPredictorFormValues = z.infer<typeof MdeDurationPredictorFormSchema>;
 
 export interface MdeDurationPredictorResultRow {
   duration: number;
-  // meanUsed: number | string; // Removed from display table
-  // varianceUsed: number | string; // Removed from display table
+  calculationMode: 'mdeToSs' | 'ssToMde';
   totalUsersAvailable?: number | string;
-  // requiredSampleSizePerVariant?: number | string; // Removed from display table
-  totalRequiredSampleSize?: number | string;
+  totalRequiredSampleSize?: number | string; // Output if mode is 'mdeToSs'
+  achievableMde?: number | string; // Output if mode is 'ssToMde', as percentage
   exposureNeededPercentage?: number | string;
-  warnings?: string[]; // Still collected for potential toast/report
+  warnings?: string[]; 
 }
 
 export type MdeDurationPredictorResults = MdeDurationPredictorResultRow[];

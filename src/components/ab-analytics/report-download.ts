@@ -4,7 +4,7 @@ import type {
     SampleSizeToMdeCalculationResults, 
     MdeDurationPredictorFormValues, 
     MdeDurationPredictorResultRow,
-    FixedDurationCalculatorResults // Added
+    FixedDurationCalculatorResults 
 } from '@/lib/types';
 
 function formatNumberForReport(num: number | undefined | null | string, precision = 0, suffix = ''): string {
@@ -165,12 +165,17 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
 }
 
 export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredictorFormValues, results: MdeDurationPredictorResultRow[]) {
-  let reportContent = "ABalytics - Dynamic Duration Calculator Report\n\n"; // Renamed report title
+  let reportContent = "ABalytics - Dynamic Duration Calculator Report\n\n";
   reportContent += "Common Inputs:\n";
   reportContent += `- Metric: ${formValues.metric || 'N/A'}\n`;
   reportContent += `- Real Estate: ${formValues.realEstate || 'N/A'}\n`;
   reportContent += `- Metric Type: ${formValues.metricType || 'N/A'}\n`;
-  reportContent += `- MDE (%): ${formatNumberForReport(formValues.minimumDetectableEffect, 2, '%')}\n`;
+  if (formValues.minimumDetectableEffect) {
+    reportContent += `- Input MDE (%): ${formatNumberForReport(formValues.minimumDetectableEffect, 2, '%')}\n`;
+  }
+  if (formValues.sampleSizePerVariant) {
+    reportContent += `- Input Sample Size (per variant): ${formatNumberForReport(formValues.sampleSizePerVariant, 0)}\n`;
+  }
   reportContent += `- Number of Variants: ${formatNumberForReport(formValues.numberOfVariants, 0)}\n`;
   reportContent += `- Statistical Power: ${formatNumberForReport(formValues.statisticalPower * 100, 0, '%')}\n`;
   reportContent += `- Significance Level (Alpha): ${formatNumberForReport(formValues.significanceLevel * 100, 0, '%')}\n\n`;
@@ -178,9 +183,14 @@ export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredic
   reportContent += "Note: Mean, Variance, and Total Users are sourced from the uploaded Excel file for each specific duration.\n\n";
 
   reportContent += "Predictions Across Durations:\n";
-  reportContent += "---------------------------------------------------------------------------------------------------\n";
-  reportContent += "Duration | Total Users Available | Total Req. Sample Size | Exposure Needed (%) | Notices\n";
-  reportContent += "---------------------------------------------------------------------------------------------------\n";
+  reportContent += "------------------------------------------------------------------------------------------------------------------\n";
+  const calculationMode = results[0]?.calculationMode;
+  if (calculationMode === 'mdeToSs') {
+    reportContent += "Duration | Total Users Available | Total Req. Sample Size | Exposure Needed (%) | Notices\n";
+  } else {
+    reportContent += "Duration | Total Users Available | Achievable MDE (%)     | Exposure Needed (%) | Notices\n";
+  }
+  reportContent += "------------------------------------------------------------------------------------------------------------------\n";
 
   results.forEach(row => {
     const exposure = formatNumberForReport(row.exposureNeededPercentage, 1, '%');
@@ -188,16 +198,20 @@ export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredic
 
     reportContent += `${String(row.duration).padEnd(8)} | `;
     reportContent += `${formatNumberForReport(row.totalUsersAvailable, 0).padEnd(21)} | `;
-    reportContent += `${formatNumberForReport(row.totalRequiredSampleSize, 0).padEnd(22)} | `; 
+    if (row.calculationMode === 'mdeToSs') {
+      reportContent += `${formatNumberForReport(row.totalRequiredSampleSize, 0).padEnd(22)} | `; 
+    } else {
+      reportContent += `${formatNumberForReport(row.achievableMde, 2, '%').padEnd(22)} | `;
+    }
     reportContent += `${exposure.padEnd(19)} | `;
     reportContent += `${notices}\n`; 
   });
-  reportContent += "---------------------------------------------------------------------------------------------------\n";
+  reportContent += "------------------------------------------------------------------------------------------------------------------\n";
 
   const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "abalytics_dynamic_duration_calculator_report.txt"; // Renamed file
+  link.download = "abalytics_dynamic_duration_calculator_report.txt";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -221,11 +235,11 @@ export function downloadFixedDurationCalculatorReport(results: FixedDurationCalc
   reportContent += `- Statistical Power Used: ${formatNumberForReport(inputs.statisticalPower * 100, 0, '%')}\n`;
   reportContent += `- Significance Level (Alpha) Used: ${formatNumberForReport(inputs.significanceLevel * 100, 0, '%')}\n`;
 
-  if (calculationMode === 'ssToMde') {
+  if (calculationMode === 'ssToMde' && inputs.sampleSizePerVariant) {
     reportContent += `- Input Sample Size (per variant): ${formatNumberForReport(inputs.sampleSizePerVariant)}\n\n`;
     reportContent += "Calculated Result:\n";
     reportContent += `- Achievable MDE (Relative %): ${formatNumberForReport(calculatedMde, 2, '%')}\n`;
-  } else { // mdeToSs
+  } else if (calculationMode === 'mdeToSs' && inputs.minimumDetectableEffect) { 
     reportContent += `- Input MDE (%): ${formatNumberForReport(inputs.minimumDetectableEffect, 2, '%')}\n\n`;
     reportContent += "Calculated Results:\n";
     reportContent += `- Required Sample Size (per variant): ${formatNumberForReport(calculatedSampleSizePerVariant)}\n`;
