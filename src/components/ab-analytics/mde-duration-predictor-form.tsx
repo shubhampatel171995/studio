@@ -23,7 +23,7 @@ import {
 } from "@/lib/types";
 import { calculateSampleSizeAction } from "@/actions/ab-analytics-actions";
 import { useState, useEffect } from "react";
-import { Loader2, SettingsIcon, AlertTriangle, Download } from "lucide-react";
+import { Loader2, SettingsIcon, Download } from "lucide-react"; // Removed AlertTriangle as notices are removed from table
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
@@ -135,17 +135,18 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     setIsLoading(true);
     onResults(null);
     const aggregatedResults: MdeDurationPredictorResultRow[] = [];
+    let calculationWarnings: string[] = []; // To aggregate warnings for toast
 
     for (const duration of PREDICTION_DURATIONS) {
       let meanForCalc: number | string = 'N/A';
       let varianceForCalc: number | string = 'N/A';
       let totalUsersForDuration: number | string | undefined = 'N/A';
-      let warningsForThisRow: string[] = [];
+      let rowSpecificWarnings: string[] = [];
 
       const matchedRow = parsedExcelData.find(row => 
         row.metric === values.metric &&
         row.realEstate === values.realEstate &&
-        row.lookbackDays == duration && // Ensure exact match for duration
+        row.lookbackDays == duration && 
         row.mean !== undefined && !isNaN(Number(row.mean)) &&
         row.variance !== undefined && !isNaN(Number(row.variance)) &&
         row.totalUsers !== undefined && !isNaN(Number(row.totalUsers))
@@ -156,7 +157,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
         varianceForCalc = Number(matchedRow.variance);
         totalUsersForDuration = Number(matchedRow.totalUsers);
       } else {
-        warningsForThisRow.push(`Data not found in uploaded file for ${duration}-day duration.`);
+        rowSpecificWarnings.push(`Data not found in uploaded file for ${duration}-day duration.`);
       }
       
       if (typeof meanForCalc === 'number' && typeof varianceForCalc === 'number') {
@@ -178,17 +179,20 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
           const result = await calculateSampleSizeAction(actionInput);
           aggregatedResults.push({
             duration,
-            meanUsed: meanForCalc,
-            varianceUsed: varianceForCalc,
+            meanUsed: meanForCalc, // Keep for report
+            varianceUsed: varianceForCalc, // Keep for report
             totalUsersAvailable: totalUsersForDuration,
-            requiredSampleSizePerVariant: result.requiredSampleSizePerVariant,
+            requiredSampleSizePerVariant: result.requiredSampleSizePerVariant, // Keep for report
             totalRequiredSampleSize: result.requiredSampleSizePerVariant && values.numberOfVariants ? result.requiredSampleSizePerVariant * values.numberOfVariants : undefined,
             exposureNeededPercentage: result.exposureNeededPercentage,
-            warnings: [...warningsForThisRow, ...(result.warnings || [])],
+            warnings: [...rowSpecificWarnings, ...(result.warnings || [])], // Keep for report and potential summary toast
           });
+          if (result.warnings) calculationWarnings.push(...result.warnings.map(w => `${duration}-day: ${w}`));
+
 
         } catch (error) {
           console.error(`Error calculating for duration ${duration}:`, error);
+          const errorMsg = `Calculation error for ${duration}-day: ${error instanceof Error ? error.message : 'Unknown error'}`;
           aggregatedResults.push({
             duration,
             meanUsed: meanForCalc,
@@ -197,11 +201,11 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
             requiredSampleSizePerVariant: 'Error',
             totalRequiredSampleSize: 'Error',
             exposureNeededPercentage: 'Error',
-            warnings: [...warningsForThisRow, `Calculation error: ${error instanceof Error ? error.message : 'Unknown error'}`],
+            warnings: [...rowSpecificWarnings, errorMsg],
           });
+          calculationWarnings.push(errorMsg);
         }
       } else {
-         // Data was N/A from the start (no match in Excel)
          aggregatedResults.push({
             duration,
             meanUsed: 'N/A',
@@ -210,13 +214,25 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
             requiredSampleSizePerVariant: 'N/A',
             totalRequiredSampleSize: 'N/A',
             exposureNeededPercentage: 'N/A',
-            warnings: warningsForThisRow,
+            warnings: rowSpecificWarnings, 
           });
+          if (rowSpecificWarnings.length > 0) calculationWarnings.push(...rowSpecificWarnings.map(w => `${duration}-day: ${w}`));
       }
     }
     onResults(aggregatedResults);
     setIsLoading(false);
-    toast({ title: "Duration Prediction Complete", description: "Results table updated below." });
+    
+    if (calculationWarnings.length > 0) {
+        const uniqueWarnings = Array.from(new Set(calculationWarnings));
+        const warningSummary = uniqueWarnings.slice(0, 2).join('; ') + (uniqueWarnings.length > 2 ? '...' : '');
+        toast({ 
+            title: "Duration Prediction Complete with Notices", 
+            description: `Some calculations had issues: ${warningSummary.replace(/_/g, ' ')}. Full details in the downloaded report.`,
+            duration: 7000,
+        });
+    } else {
+        toast({ title: "Duration Prediction Complete", description: "Results table updated below." });
+    }
   }
   
   const handleDownloadReport = () => {
@@ -236,117 +252,74 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
 
 
   return (
-    <Card className="w-full shadow-lg">
-      <CardHeader className="flex flex-row items-start justify-between">
-        <div>
-            <CardTitle className="font-headline text-2xl">MDE to Sample Size Across Durations</CardTitle>
-            <CardDescription>
-                Enter experiment parameters. The calculator will predict sample size and exposure for 7, 14, 21, and 30 day durations using data from your uploaded file.
-            </CardDescription>
-        </div>
-        <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
-            <DialogTrigger asChild>
-                 <Button variant="outline" size="icon">
-                    <SettingsIcon className="h-5 w-5" />
-                    <span className="sr-only">Open Statistical Settings</span>
-                </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-                <FormProvider {...form}>
-                    <DialogHeader>
-                        <DialogTitle>Advanced Statistical Settings</DialogTitle>
-                        <p className="text-xs text-muted-foreground">Adjust statistical power and significance level (alpha).</p>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <FormField control={form.control} name="statisticalPower" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Statistical Power (1 - β)</FormLabel>
-                            <FormControl><Input type="number" placeholder="e.g., 0.8" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="0.01" min="0.01" max="0.99" /></FormControl>
-                            <FormDescription className="text-xs">Typically 0.8 (80%).</FormDescription><FormMessage />
-                        </FormItem>)} />
-                        <FormField control={form.control} name="significanceLevel" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Significance Level (α)</FormLabel>
-                            <FormControl><Input type="number" placeholder="e.g., 0.05" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="0.01" min="0.01" max="0.99" /></FormControl>
-                            <FormDescription className="text-xs">Typically 0.05 (5%).</FormDescription><FormMessage />
-                        </FormItem>)} />
-                    </div>
-                    <DialogFooter><DialogClose asChild><Button type="button">Done</Button></DialogClose></DialogFooter>
-                </FormProvider>
-            </DialogContent>
-        </Dialog>
-      </CardHeader>
-      <CardContent>
-        <FormProvider {...form}>
-            <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                    <Separator />
-                    <p className="text-sm font-medium text-foreground">Experiment Configuration</p>
-                    <p className="text-xs text-muted-foreground -mt-6">
-                        This predictor relies on data uploaded via "Upload & Map Data". Ensure your file contains entries for 7, 14, 21, and 30 day lookback periods for the selected Metric & Real Estate.
-                        {uploadedFileName && <span className="block mt-1">Currently using: <strong>{uploadedFileName}</strong></span>}
-                        {!uploadedFileName && <span className="block mt-1 text-destructive"><strong>No data file uploaded. Please upload data via the main page.</strong></span>}
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <FormField control={form.control} name="metric" render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Metric</FormLabel>
-                        <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange();}} value={field.value} disabled={!availableMetrics.length || !parsedExcelData}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Select Metric" /></SelectTrigger></FormControl>
-                            <SelectContent>{availableMetrics.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <FormMessage />
-                        </FormItem>)} />
-                    <FormField control={form.control} name="realEstate" render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Real Estate</FormLabel>
-                        <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value} disabled={!selectedMetric || !availableRealEstates.length || !parsedExcelData}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Select Real Estate" /></SelectTrigger></FormControl>
-                            <SelectContent>{availableRealEstates.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <FormMessage />
-                        </FormItem>)} />
-                    <FormField control={form.control} name="metricType" render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Metric Type</FormLabel>
-                        <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger></FormControl>
-                            <SelectContent>{METRIC_TYPE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <FormMessage />
-                        </FormItem>)} />
-                    <FormField control={form.control} name="minimumDetectableEffect" render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>MDE (%)</FormLabel>
-                        <FormControl><Input type="number" placeholder="e.g., 0.5" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="any"/></FormControl>
-                        <FormDescription className="text-xs">Minimum change you want to detect.</FormDescription>
-                        <FormMessage />
-                        </FormItem>)} />
-                    <FormField control={form.control} name="numberOfVariants" render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Number of Variants</FormLabel>
-                        <FormControl><Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} /></FormControl>
-                        <FormDescription className="text-xs">Incl. control (min 2).</FormDescription>
-                        <FormMessage />
-                        </FormItem>)} />
-                    </div>
-                    
-                    <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                    <Button type="submit" disabled={isLoading || !parsedExcelData} className="w-full sm:w-auto">
-                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Predict Durations
-                    </Button>
-                    {currentResults && (
-                        <Button type="button" variant="outline" onClick={handleDownloadReport} className="w-full sm:w-auto" disabled={isLoading}>
-                            <Download className="mr-2 h-4 w-4" /> Download Report
-                        </Button>
-                    )}
-                    </div>
-                </form>
-            </Form>
-        </FormProvider>
-      </CardContent>
-    </Card>
+    <FormProvider {...form}>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <Separator />
+          <p className="text-sm font-medium text-foreground">Experiment Configuration</p>
+          <p className="text-xs text-muted-foreground -mt-6">
+            This predictor relies on data uploaded via "Upload & Map Data". Ensure your file contains entries for 7, 14, 21, and 30 day lookback periods for the selected Metric & Real Estate.
+            {uploadedFileName && <span className="block mt-1">Currently using: <strong>{uploadedFileName}</strong></span>}
+            {!uploadedFileName && <span className="block mt-1 text-destructive"><strong>No data file uploaded. Please upload data via the main page.</strong></span>}
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <FormField control={form.control} name="metric" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Metric</FormLabel>
+                <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value} disabled={!availableMetrics.length || !parsedExcelData}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select Metric" /></SelectTrigger></FormControl>
+                  <SelectContent>{availableMetrics.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>)} />
+            <FormField control={form.control} name="realEstate" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Real Estate</FormLabel>
+                <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value} disabled={!selectedMetric || !availableRealEstates.length || !parsedExcelData}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select Real Estate" /></SelectTrigger></FormControl>
+                  <SelectContent>{availableRealEstates.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>)} />
+            <FormField control={form.control} name="metricType" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Metric Type</FormLabel>
+                <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value}>
+                  <FormControl><SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger></FormControl>
+                  <SelectContent>{METRIC_TYPE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>)} />
+            <FormField control={form.control} name="minimumDetectableEffect" render={({ field }) => (
+              <FormItem>
+                <FormLabel>MDE (%)</FormLabel>
+                <FormControl><Input type="number" placeholder="e.g., 0.5" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => { field.onChange(Number(e.target.value)); clearResultsOnInputChange(); }} step="any" /></FormControl>
+                <FormDescription className="text-xs">Minimum change you want to detect.</FormDescription>
+                <FormMessage />
+              </FormItem>)} />
+            <FormField control={form.control} name="numberOfVariants" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Number of Variants</FormLabel>
+                <FormControl><Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => { field.onChange(Number(e.target.value)); clearResultsOnInputChange(); }} /></FormControl>
+                <FormDescription className="text-xs">Incl. control (min 2).</FormDescription>
+                <FormMessage />
+              </FormItem>)} />
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4 pt-4">
+            <Button type="submit" disabled={isLoading || !parsedExcelData} className="w-full sm:w-auto">
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Predict Durations
+            </Button>
+            {currentResults && (
+              <Button type="button" variant="outline" onClick={handleDownloadReport} className="w-full sm:w-auto" disabled={isLoading}>
+                <Download className="mr-2 h-4 w-4" /> Download Report
+              </Button>
+            )}
+          </div>
+        </form>
+      </Form>
+    </FormProvider>
   );
 }
 
@@ -359,7 +332,7 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
     return null;
   }
 
- const formatCell = (value: number | string | undefined, isPercentage = false, isLargeNumber = false, precision = isPercentage ? 1 : (isLargeNumber ? 0 : 4) ) => {
+ const formatCell = (value: number | string | undefined, isPercentage = false, isLargeNumber = false, precision = isPercentage ? 1 : (isLargeNumber ? 0 : 2) ) => {
     if (value === undefined || value === null || (typeof value === 'number' && isNaN(value))) {
       return <span className="text-muted-foreground">N/A</span>;
     }
@@ -378,7 +351,7 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
       }
       return value.toLocaleString(undefined, {minimumFractionDigits: isLargeNumber ? 0 : precision, maximumFractionDigits: precision});
     }
-    return String(value); // Should not happen if types are correct
+    return String(value); 
   };
 
 
@@ -393,27 +366,16 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
             <TableHeader>
               <TableRow>
                 <TableHead className="min-w-[100px]">Duration (Days)</TableHead>
-                <TableHead className="min-w-[120px]">Mean Used</TableHead>
-                <TableHead className="min-w-[120px]">Variance Used</TableHead>
                 <TableHead className="min-w-[150px]">Total Users Available</TableHead>
-                <TableHead className="min-w-[180px]">Req. Sample Size (per variant)</TableHead>
                 <TableHead className="min-w-[180px]">Total Req. Sample Size</TableHead>
                 <TableHead className="min-w-[150px]">Exposure Needed (%)</TableHead>
-                <TableHead className="min-w-[200px]">Notices</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {results.map((row, index) => (
                 <TableRow key={index}>
                   <TableCell className="font-medium">{row.duration}</TableCell>
-                  <TableCell>{formatCell(row.meanUsed, false, false, 4)}</TableCell>
-                  <TableCell>{formatCell(row.varianceUsed, false, false, 6)}</TableCell>
                   <TableCell>{formatCell(row.totalUsersAvailable, false, true)}</TableCell>
-                  <TableCell 
-                    className={cn(typeof row.requiredSampleSizePerVariant === 'number' ? "text-primary font-semibold" : (row.requiredSampleSizePerVariant === 'Error' ? "text-destructive font-semibold" : "text-muted-foreground"))}
-                  >
-                    {formatCell(row.requiredSampleSizePerVariant, false, true)}
-                  </TableCell>
                   <TableCell 
                      className={cn(typeof row.totalRequiredSampleSize === 'number' ? "text-primary font-semibold" : (row.totalRequiredSampleSize === 'Error' ? "text-destructive font-semibold" : "text-muted-foreground"))}
                   >
@@ -421,17 +383,6 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
                   </TableCell>
                   <TableCell>
                     {formatCell(row.exposureNeededPercentage, true)}
-                  </TableCell>
-                  <TableCell>
-                    {row.warnings && row.warnings.length > 0 ? (
-                      <ul className="list-disc list-inside text-xs space-y-0.5">
-                        {row.warnings.map((warn, i) => (
-                          <li key={i} className={warn.toLowerCase().includes("error") || warn.toLowerCase().includes("cannot estimate") || warn.toLowerCase().includes("not found") ? "text-destructive" : "text-muted-foreground"}>
-                            {warn.replace(/_/g, ' ')}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : <span className="text-muted-foreground text-xs">-</span> }
                   </TableCell>
                 </TableRow>
               ))}

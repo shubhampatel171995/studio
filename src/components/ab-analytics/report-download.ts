@@ -172,23 +172,21 @@ export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredic
   reportContent += "Note: Mean, Variance, and Total Users are sourced from the uploaded Excel file for each specific duration.\n\n";
 
   reportContent += "Predictions Across Durations:\n";
-  reportContent += "--------------------------------------------------------------------------------------------------------------------\n";
-  reportContent += "Duration | Mean Used | Variance Used | Total Users Available | Req. Sample/Variant | Total Req. Sample | Exposure Needed (%) | Notices\n";
-  reportContent += "--------------------------------------------------------------------------------------------------------------------\n";
+  reportContent += "---------------------------------------------------------------------------------------------------\n";
+  reportContent += "Duration | Total Users Available | Total Req. Sample | Exposure Needed (%) | Notices\n";
+  reportContent += "---------------------------------------------------------------------------------------------------\n";
 
   results.forEach(row => {
     const exposure = formatNumberForReport(row.exposureNeededPercentage, 1, '%');
+    const notices = (row.warnings || []).join(', ').replace(/_/g, ' ');
 
     reportContent += `${String(row.duration).padEnd(8)} | `;
-    reportContent += `${formatNumberForReport(row.meanUsed, 4).padEnd(10)} | `;
-    reportContent += `${formatNumberForReport(row.varianceUsed, 6).padEnd(13)} | `;
     reportContent += `${formatNumberForReport(row.totalUsersAvailable, 0).padEnd(21)} | `;
-    reportContent += `${formatNumberForReport(row.requiredSampleSizePerVariant, 0).padEnd(19)} | `;
     reportContent += `${formatNumberForReport(row.totalRequiredSampleSize, 0).padEnd(19)} | `;
     reportContent += `${exposure.padEnd(19)} | `;
-    reportContent += `${(row.warnings || []).join(', ').replace(/_/g, ' ')}\n`;
+    reportContent += `${notices}\n`; // Notices are still included in the report for full context
   });
-  reportContent += "--------------------------------------------------------------------------------------------------------------------\n";
+  reportContent += "---------------------------------------------------------------------------------------------------\n";
 
   const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
   const link = document.createElement("a");
