@@ -20,7 +20,7 @@ import {
   type MdeDurationPredictorFormValues, 
   type MdeDurationPredictorResultRow,
   type ExcelDataRow,
-  type SampleSizeToMdeFormValues, // For calling the action
+  type SampleSizeToMdeFormValues, 
 } from "@/lib/types";
 import { calculateSampleSizeAction, calculateMdeFromSampleSizeAction } from "@/actions/ab-analytics-actions";
 import { useState, useEffect } from "react";
@@ -31,12 +31,10 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   METRIC_OPTIONS as DEFAULT_METRIC_OPTIONS, 
   REAL_ESTATE_OPTIONS as DEFAULT_REAL_ESTATE_OPTIONS, 
-  DEFAULT_MDE_PERCENT, 
   DEFAULT_STATISTICAL_POWER, 
   DEFAULT_SIGNIFICANCE_LEVEL, 
   METRIC_TYPE_OPTIONS,
   PREDICTION_DURATIONS,
-  DEFAULT_SAMPLE_SIZE_PER_VARIANT
 } from "@/lib/constants";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -51,6 +49,7 @@ interface MdeDurationPredictorFormProps {
 export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurationPredictorFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [parsedExcelData, setParsedExcelData] = useState<ExcelDataRow[] | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   
   const [availableMetrics, setAvailableMetrics] = useState<string[]>(DEFAULT_METRIC_OPTIONS);
   const [availableRealEstates, setAvailableRealEstates] = useState<string[]>(DEFAULT_REAL_ESTATE_OPTIONS);
@@ -80,10 +79,12 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
 
   useEffect(() => {
     const storedData = localStorage.getItem('abalyticsMappedData');
+    const storedFileName = localStorage.getItem('abalyticsFileName');
     if (storedData) {
       try {
         const data: ExcelDataRow[] = JSON.parse(storedData);
         setParsedExcelData(data);
+        setUploadedFileName(storedFileName || null);
 
         const uniqueMetrics = Array.from(new Set(data.map(row => row.metric).filter(Boolean) as string[]));
         setAvailableMetrics(uniqueMetrics.length > 0 ? uniqueMetrics : DEFAULT_METRIC_OPTIONS);
@@ -93,12 +94,14 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
       } catch (e) { 
           console.error("Failed to parse stored data:", e); 
           setParsedExcelData(null); 
+          setUploadedFileName(null);
           setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
           form.resetField("metric");
         }
     } else {
         setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
         setParsedExcelData(null);
+        setUploadedFileName(null);
     }
   }, [form]);
 
@@ -147,7 +150,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
         toast({
             variant: "destructive",
             title: "No Data Uploaded",
-            description: "Please upload an Excel file with historical data using the 'Upload & Map Data' button on the main page.",
+            description: "Please upload an Excel file with historical data using the 'Upload & Map Data' button.",
         });
         onResults(null);
         return;
@@ -159,7 +162,9 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     let allCalculationWarnings: string[] = []; 
 
     const calculationMode: 'mdeToSs' | 'ssToMde' = 
-        (values.minimumDetectableEffect && values.minimumDetectableEffect > 0) ? 'mdeToSs' : 'ssToMde';
+        (values.minimumDetectableEffect && values.minimumDetectableEffect > 0) ? 'mdeToSs' :
+        (values.sampleSizePerVariant && values.sampleSizePerVariant > 0) ? 'ssToMde' :
+        'mdeToSs'; // Default if somehow both are invalid after schema validation
 
     for (const duration of PREDICTION_DURATIONS) {
       let meanForCalc: number | undefined = undefined;
@@ -202,7 +207,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
               targetExperimentDurationDays: duration,
               totalUsersInSelectedDuration: totalUsersForDuration,
             };
-            const result = await calculateSampleSizeAction(actionInput as any);
+            const result = await calculateSampleSizeAction(actionInput as any); // Cast as any to bypass type mismatch until types are fully aligned
             rowResult.totalRequiredSampleSize = result.requiredSampleSizePerVariant && values.numberOfVariants ? result.requiredSampleSizePerVariant * values.numberOfVariants : undefined;
             rowResult.exposureNeededPercentage = result.exposureNeededPercentage;
             if (result.warnings) {
@@ -220,8 +225,8 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
                 significanceLevel: values.significanceLevel,
                 numberOfVariants: values.numberOfVariants,
                 realEstate: values.realEstate,
-                targetExperimentDurationDays: duration, // For context in action
-                totalUsersInSelectedDuration: totalUsersForDuration, // Important for exposure calc
+                targetExperimentDurationDays: duration, 
+                totalUsersInSelectedDuration: totalUsersForDuration, 
              };
              const result = await calculateMdeFromSampleSizeAction(actionInput);
              rowResult.achievableMde = result.achievableMde;
@@ -240,7 +245,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
           else rowResult.achievableMde = 'Error';
           rowResult.exposureNeededPercentage = 'Error';
         }
-      } else { // Data not found for mean/variance
+      } else { 
           if (calculationMode === 'mdeToSs') rowResult.totalRequiredSampleSize = 'N/A';
           else rowResult.achievableMde = 'N/A';
           rowResult.exposureNeededPercentage = 'N/A';
@@ -251,18 +256,6 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     onResults(aggregatedResults);
     setIsLoading(false);
     
-    const uniqueWarnings = Array.from(new Set(allCalculationWarnings));
-    if (uniqueWarnings.length > 0) {
-        const warningSummary = uniqueWarnings.slice(0, 1).join('; ') + (uniqueWarnings.length > 1 ? ` and ${uniqueWarnings.length -1} more...` : '');
-        toast({ 
-            title: "Calculation Notices", 
-            description: `Some calculations had issues or missing data: ${warningSummary}. Full details in downloaded report.`,
-            duration: 7000,
-            variant: "default"
-        });
-    } else {
-        toast({ title: "Dynamic Duration Calculation Complete", description: "Results table updated below." });
-    }
   }
   
   const handleDownloadReport = () => {
@@ -292,7 +285,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
         <div>
           <CardTitle className="font-headline text-2xl">Dynamic Duration Calculator</CardTitle>
           <CardDescription>
-            Predict sample size or MDE needed across different durations.
+            Predict {calculationTarget === 'Sample Size' ? 'sample size' : 'achievable MDE'} needed across different durations.
           </CardDescription>
         </div>
         <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
@@ -473,7 +466,7 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
   if (!results || results.length === 0) {
     return null;
   }
-  const calculationMode = results[0]?.calculationMode; // Assume all rows have same mode
+  const calculationMode = results[0]?.calculationMode; 
 
  const formatCell = (value: number | string | undefined, isPercentage = false, isLargeNumber = false, precision = isPercentage ? 1 : (isLargeNumber ? 0 : 2) ) => {
     if (value === undefined || value === null) return <span className="text-muted-foreground">-</span>;
@@ -503,7 +496,7 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
       <CardHeader>
         <CardTitle className="font-headline text-2xl">Dynamic Duration Calculator Predictions</CardTitle>
          <CardDescription>
-          Predictions for {calculationMode === 'ssToMde' ? 'Achievable MDE' : 'Required Sample Size'} across durations.
+          Predictions for {calculationMode === 'ssToMde' ? 'Achievable MDE' : 'Total Required Sample Size'} across durations.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -531,15 +524,10 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
             </TableBody>
           </Table>
         </div>
-         {results.some(row => row.warnings && row.warnings.length > 0) && (
-            <div className="mt-4">
-              <h3 className="font-medium text-sm flex items-center text-muted-foreground">
-                <AlertTriangle className="mr-2 h-4 w-4" />
-                Some durations may have notices. Download report for details.
-              </h3>
-            </div>
-        )}
       </CardContent>
     </Card>
   );
 }
+
+
+    
