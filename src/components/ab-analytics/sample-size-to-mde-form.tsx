@@ -22,7 +22,7 @@ import { Loader2, AlertTriangle, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { METRIC_OPTIONS, REAL_ESTATE_OPTIONS, DEFAULT_STATISTICAL_POWER, DEFAULT_SIGNIFICANCE_LEVEL } from "@/lib/constants";
+import { METRIC_OPTIONS, REAL_ESTATE_OPTIONS, DEFAULT_STATISTICAL_POWER, DEFAULT_SIGNIFICANCE_LEVEL, DEFAULT_SAMPLE_SIZE_PER_VARIANT } from "@/lib/constants";
 
 
 interface SampleSizeToMdeFormProps {
@@ -42,8 +42,7 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
       metric: METRIC_OPTIONS[0],
       mean: NaN,
       variance: NaN,
-      sampleSizePerVariant: NaN,
-      // experimentDurationDays: 14, // Default to 2 weeks, but not used in core calc
+      sampleSizePerVariant: DEFAULT_SAMPLE_SIZE_PER_VARIANT,
       realEstate: REAL_ESTATE_OPTIONS[0],
       statisticalPower: DEFAULT_STATISTICAL_POWER,
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
@@ -54,18 +53,19 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
     setIsLoading(true);
     onResults(null);
     try {
-      const result = await calculateMdeFromSampleSizeAction(values);
-      onResults({ ...result, inputs: values });
-      if (result.achievableMde !== undefined) {
+      const resultAction = await calculateMdeFromSampleSizeAction(values);
+      const fullResults = { inputs: values, ...resultAction };
+      onResults(fullResults);
+
+      if (resultAction.achievableMde !== undefined) {
         toast({
           title: "MDE Calculation Complete",
           description: "Achievable MDE calculated based on your inputs.",
         });
-      } else if (result.warnings && result.warnings.length > 0) {
+      } else if (resultAction.warnings && resultAction.warnings.length > 0) {
          toast({
-          variant: "default", // It's not destructive if only warnings
           title: "Calculation Notice",
-          description: result.warnings.join(' '),
+          description: resultAction.warnings.join(' '),
         });
       } else {
          toast({
@@ -76,7 +76,7 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
       }
     } catch (error) {
       console.error(error);
-      onResults(null);
+      onResults(null); // Clear results on error
       toast({
         variant: "destructive",
         title: "MDE Calculation Failed",
@@ -88,7 +88,7 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
   }
   
   const handleDownloadReport = () => {
-    if (currentResults) {
+    if (currentResults) { // currentResults already includes 'inputs'
       onDownload(currentResults);
     } else {
        toast({
@@ -196,9 +196,14 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
 
   const { achievableMde, warnings, confidenceLevel, powerLevel } = results;
 
-  if (achievableMde === undefined && (!warnings || warnings.length === 0)) {
-    return <p className="text-muted-foreground text-center py-8">No data to display. Please run the calculation.</p>;
+  // Condition to show the card: if MDE is calculated OR if there are warnings.
+  // If neither, it means no calculation was run or it resulted in nothing (which shouldn't happen if form is submitted).
+  const shouldShowCard = achievableMde !== undefined || (warnings && warnings.length > 0);
+
+  if (!shouldShowCard) {
+     return null; // Don't render the card if there's nothing to show yet.
   }
+
 
   return (
     <Card className="mt-8 w-full shadow-lg">
@@ -206,6 +211,10 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
         <CardTitle className="font-headline text-2xl">Sample Size to MDE Results</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {achievableMde === undefined && warnings && warnings.length === 0 && (
+             <p className="text-muted-foreground text-center py-8">Please run the calculation.</p>
+        )}
+
         {achievableMde !== undefined && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div>
@@ -249,3 +258,4 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
     </Card>
   );
 }
+

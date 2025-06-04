@@ -1,76 +1,41 @@
 
-import type { SampleSizeCalculationResults, MdeExplorerFormValues, MdeExplorerResults } from '@/lib/types';
+import type { MdeToSampleSizeCalculationResults, SampleSizeToMdeCalculationResults } from '@/lib/types';
 
 function formatNumber(num: number | undefined | null, precision = 0): string {
   if (num === undefined || num === null || isNaN(num)) return 'N/A';
   return num.toLocaleString(undefined, { minimumFractionDigits: precision, maximumFractionDigits: precision });
 }
 
-export function downloadSampleSizeReport(results: SampleSizeCalculationResults) {
-  let reportContent = "ABalytics - Sample Size Calculation Report\n\n";
+export function downloadMdeToSampleSizeReport(results: MdeToSampleSizeCalculationResults) {
+  let reportContent = "ABalytics - MDE to Sample Size Report\n\n";
   reportContent += "Inputs:\n";
   reportContent += `- Metric: ${results.metric || 'N/A'}\n`;
+  reportContent += `- Target MDE: ${formatNumber(results.minimumDetectableEffect ? results.minimumDetectableEffect * 100 : null, 2)}%\n`;
   reportContent += `- Mean (Historical): ${formatNumber(results.mean, 4)}\n`;
   reportContent += `- Variance (Historical): ${formatNumber(results.variance, 4)}\n`;
+  reportContent += `- Number of Users (in Lookback): ${formatNumber(results.numberOfUsers)}\n`;
   reportContent += `- Lookback Days: ${formatNumber(results.lookbackDays)}\n`;
   reportContent += `- Real Estate: ${results.realEstate || 'N/A'}\n`;
-  reportContent += `- Number of Users (in Lookback): ${formatNumber(results.numberOfUsers)}\n`;
-  reportContent += `- Minimum Detectable Effect (MDE): ${formatNumber(results.minimumDetectableEffect ? results.minimumDetectableEffect * 100 : null, 2)}%\n`;
-  reportContent += `- Statistical Power: ${formatNumber(results.powerLevel ? results.powerLevel * 100 : null, 0)}%\n`; // powerLevel is from AI output
-  reportContent += `- Significance Level (Alpha): ${formatNumber(results.significanceLevel ? results.significanceLevel * 100 : null, 0)}%\n\n`; // significanceLevel is from form
+  reportContent += `- Statistical Power: ${formatNumber(results.powerLevel ? results.powerLevel * 100 : null, 0)}%\n`;
+  reportContent += `- Significance Level (Alpha): ${formatNumber(results.significanceLevel ? results.significanceLevel * 100 : null, 0)}%\n\n`;
   
-  reportContent += "Results:\n";
+  reportContent += "Core Results:\n";
   reportContent += `- Required Sample Size (per variant): ${formatNumber(results.requiredSampleSize)}\n`;
-  reportContent += `- Estimated Test Duration: ${results.estimatedTestDuration ? `${Math.ceil(results.estimatedTestDuration)} days` : 'N/A'}\n`;
-  reportContent += `- Confidence Level: ${formatNumber(results.confidenceLevel ? results.confidenceLevel * 100 : null, 0)}%\n`;
-  reportContent += `- Power Level (as calculated): ${formatNumber(results.powerLevel ? results.powerLevel * 100 : null, 0)}%\n\n`;
+  reportContent += `- Confidence Level: ${formatNumber(results.confidenceLevel ? results.confidenceLevel * 100 : null, 0)}%\n\n`;
 
-  if (results.warnings && results.warnings.length > 0) {
-    reportContent += "Warnings:\n";
-    results.warnings.forEach(warning => {
-      reportContent += `- ${warning}\n`;
-    });
-  }
-
-  const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = "abalytics_sample_size_report.txt";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(link.href);
-}
-
-
-export function downloadMdeExplorerReport(input: MdeExplorerFormValues, results: MdeExplorerResults) {
-  let reportContent = "ABalytics - MDE Explorer Report\n\n";
-  reportContent += "Inputs:\n";
-  reportContent += `- Metric: ${input.metric || 'N/A'}\n`;
-  reportContent += `- Mean (Historical): ${formatNumber(input.mean, 4)}\n`;
-  reportContent += `- Variance (Historical): ${formatNumber(input.variance, 4)}\n`;
-  reportContent += `- Lookback Days: ${formatNumber(input.lookbackDays)}\n`;
-  reportContent += `- Real Estate: ${input.realEstate || 'N/A'}\n`;
-  reportContent += `- Number of Users (in Lookback): ${formatNumber(input.numberOfUsers)}\n`;
-  reportContent += `- Statistical Power: ${formatNumber(input.statisticalPower ? input.statisticalPower * 100 : null, 0)}%\n`;
-  reportContent += `- Significance Level (Alpha): ${formatNumber(input.significanceLevel ? input.significanceLevel * 100 : null, 0)}%\n`;
-  reportContent += `- Explored Durations (Weeks): ${input.experimentDurations?.join(', ') || 'N/A'}\n\n`;
-
-  reportContent += "Results Table:\n";
-  if (results.tableData.length > 0) {
-    reportContent += "Weeks | Total Users | Achievable MDE (%) | Confidence (%) | Power (%)\n";
-    reportContent += "------|-------------|--------------------|----------------|----------\n";
-    results.tableData.forEach(row => {
-      reportContent += `${formatNumber(row.weeks).padEnd(5)} | ${formatNumber(row.totalUsers).padEnd(11)} | ${formatNumber(row.achievableMde, 2).padEnd(18)} | ${formatNumber(row.confidence, 0).padEnd(14)} | ${formatNumber(row.power, 0)}\n`;
+  if (results.durationEstimates && results.durationEstimates.length > 0) {
+    const dailyUsers = results.numberOfUsers && results.lookbackDays && results.lookbackDays > 0 ? results.numberOfUsers / results.lookbackDays : 0;
+    reportContent += `Duration vs. Traffic Availability (Estimated Daily Traffic: ~${formatNumber(dailyUsers,0)} users):\n`;
+    reportContent += "Weeks | Total Users Available (Est.) | Sufficient for Test?\n";
+    reportContent += "------|------------------------------|---------------------\n";
+    results.durationEstimates.forEach(row => {
+      reportContent += `${formatNumber(row.weeks).padEnd(5)} | ${formatNumber(row.totalUsersAvailable).padEnd(28)} | ${row.isSufficient ? 'Yes' : 'No'}\n`;
     });
     reportContent += "\n";
-  } else {
-    reportContent += "No table data generated for the selected inputs and durations.\n\n"
   }
 
-
   if (results.warnings && results.warnings.length > 0) {
-    reportContent += "Warnings/Notices:\n";
+    reportContent += "Notices from Calculation:\n";
     results.warnings.forEach(warning => {
       reportContent += `- ${warning}\n`;
     });
@@ -79,10 +44,44 @@ export function downloadMdeExplorerReport(input: MdeExplorerFormValues, results:
   const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "abalytics_mde_explorer_report.txt";
+  link.download = "abalytics_mde_to_samplesize_report.txt";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(link.href);
 }
 
+
+export function downloadSampleSizeToMdeReport(results: SampleSizeToMdeCalculationResults) {
+  let reportContent = "ABalytics - Sample Size to MDE Report\n\n";
+  reportContent += "Inputs:\n";
+  reportContent += `- Metric: ${results.inputs.metric || 'N/A'}\n`;
+  reportContent += `- Sample Size (per variant): ${formatNumber(results.inputs.sampleSizePerVariant)}\n`;
+  reportContent += `- Mean (Historical): ${formatNumber(results.inputs.mean, 4)}\n`;
+  reportContent += `- Variance (Historical): ${formatNumber(results.inputs.variance, 4)}\n`;
+  reportContent += `- Real Estate: ${results.inputs.realEstate || 'N/A'}\n`;
+  reportContent += `- Statistical Power: ${formatNumber(results.inputs.statisticalPower ? results.inputs.statisticalPower * 100 : null, 0)}%\n`;
+  reportContent += `- Significance Level (Alpha): ${formatNumber(results.inputs.significanceLevel ? results.inputs.significanceLevel * 100 : null, 0)}%\n\n`;
+
+  reportContent += "Calculated Results:\n";
+  reportContent += `- Achievable MDE (Relative): ${formatNumber(results.achievableMde, 2)}%\n`;
+  reportContent += `- Confidence Level: ${formatNumber(results.confidenceLevel ? results.confidenceLevel * 100 : null, 0)}%\n`;
+  reportContent += `- Power Level Used: ${formatNumber(results.powerLevel ? results.powerLevel * 100 : null, 0)}%\n\n`;
+
+
+  if (results.warnings && results.warnings.length > 0) {
+    reportContent += "Notices from Calculation:\n";
+    results.warnings.forEach(warning => {
+      reportContent += `- ${warning}\n`;
+    });
+  }
+
+  const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "abalytics_samplesize_to_mde_report.txt";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
+}

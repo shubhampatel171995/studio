@@ -2,151 +2,119 @@
 'use server';
 
 /**
- * @fileOverview Flow for calculating the required sample size for an A/B test.
+ * @fileOverview AI Flow for calculating the required sample size for an A/B test based on MDE.
  *
  * - calculateSampleSize - Calculates the required sample size for an A/B test.
- * - CalculateSampleSizeInput - The input type for the calculateSampleSize function.
- * - CalculateSampleSizeOutput - The return type for the calculateSampleSize function.
+ * - CalculateAIFlowInput - The input type for the calculateSampleSize function. (from types.ts)
+ * - CalculateAIFlowOutput - The return type for the calculateSampleSize function. (from types.ts)
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import type { CalculateAIFlowInput, CalculateAIFlowOutput } from '@/lib/types'; // Using refined types
 
-const CalculateSampleSizeInputSchema = z.object({
+// Zod schema for AI flow input, ensure it aligns with CalculateAIFlowInput from types.ts
+const CalculateAIFlowInputSchema = z.object({
   metric: z.string().describe('The metric being measured (e.g., conversion rate, average order value).'),
   mean: z.number().describe('The historical mean of the metric.'),
   variance: z.number().describe('The historical variance of the metric.'),
-  realEstate: z.string().describe('The real estate where the experiment is conducted (e.g., Home Page, PDP).'),
-  numberOfUsers: z.number().describe('The number of users exposed to the real estate during the lookback window.'),
   minimumDetectableEffect: z
     .number()
-    .describe('The minimum detectable effect (MDE) that the experiment aims to detect.'),
+    .describe('The minimum detectable effect (MDE) as a decimal (e.g., 0.05 for 5%) that the experiment aims to detect.'),
   statisticalPower: z.number().default(0.8).describe('The desired statistical power (default: 0.8).'),
   significanceLevel: z.number().default(0.05).describe('The significance level (alpha) (default: 0.05).'),
 });
 
-export type CalculateSampleSizeInput = z.infer<typeof CalculateSampleSizeInputSchema>;
-
-const CalculateSampleSizeOutputSchema = z.object({
-  requiredSampleSize: z.number().describe('The required sample size per variant.'),
-  estimatedTestDuration: z
-    .number()
-    .describe('The estimated test duration in days, based on the number of users.'),
-  confidenceLevel: z.number().describe('The confidence level (1 - significance level).'),
-  powerLevel: z.number().describe('The statistical power level.'),
-  warnings: z.array(z.string()).describe('Any warnings about the input data (e.g., high variance, insufficient user base).'),
+// Zod schema for AI flow output, ensure it aligns with CalculateAIFlowOutput from types.ts
+const CalculateAIFlowOutputSchema = z.object({
+  requiredSampleSize: z.number().optional().describe('The required sample size per variant.'),
+  confidenceLevel: z.number().optional().describe('The confidence level (1 - significance level).'),
+  powerLevel: z.number().optional().describe('The statistical power level.'),
+  warnings: z.array(z.string()).optional().describe('Any warnings about the input data or calculation (e.g., high variance).'),
 });
 
-export type CalculateSampleSizeOutput = z.infer<typeof CalculateSampleSizeOutputSchema>;
 
-export async function calculateSampleSize(input: CalculateSampleSizeInput): Promise<CalculateSampleSizeOutput> {
+export async function calculateSampleSize(input: CalculateAIFlowInput): Promise<CalculateAIFlowOutput> {
   return calculateSampleSizeFlow(input);
 }
 
 const calculateSampleSizePrompt = ai.definePrompt({
   name: 'calculateSampleSizePrompt',
-  input: {schema: CalculateSampleSizeInputSchema},
-  output: {schema: CalculateSampleSizeOutputSchema},
+  input: {schema: CalculateAIFlowInputSchema},
+  output: {schema: CalculateAIFlowOutputSchema},
   prompt: `You are an AI-powered statistical reasoning tool that helps experiment owners calculate the required sample size for A/B tests.
 
   Given the following inputs, calculate the required sample size per variant for an A/B test.
+  The formula for sample size per group (N) for a two-sided test is typically:
+  N = 2 * (Z_alpha/2 + Z_beta)^2 * variance / MDE_absolute^2
+  where MDE_absolute = mean * MDE_relative.
+  Z_alpha/2 is the Z-score for the significance level (e.g., 1.96 for alpha=0.05).
+  Z_beta is the Z-score for statistical power (e.g., 0.84 for power=0.80).
 
+  Inputs:
   Metric: {{{metric}}}
   Mean: {{{mean}}}
   Variance: {{{variance}}}
-  Real Estate: {{{realEstate}}}
-  Number of Users: {{{numberOfUsers}}}
-  Minimum Detectable Effect (MDE): {{{minimumDetectableEffect}}}
+  Minimum Detectable Effect (MDE, as decimal): {{{minimumDetectableEffect}}}
   Statistical Power: {{{statisticalPower}}}
-  Significance Level: {{{significanceLevel}}}
+  Significance Level (Alpha): {{{significanceLevel}}}
 
-  Consider the following:
-  - Factor in the real estate (e.g., Home Page, PDP), statistical power, and significance level into the sample size estimation.
-  - If the provided variance is too high or too low, include a warning in the 'warnings' array.
-  - If the user base is insufficient to reach the required sample size in a reasonable timeframe (e.g., more than 4 weeks), include a warning in the 'warnings' array.
+  Perform the calculation and provide the required sample size per variant.
+  Also, determine the confidence level (1 - significance level) and echo back the power level.
+  
+  If the provided variance is very high compared to the mean (e.g., variance > 2 * mean) or very low (e.g., variance < 0.01 * mean if mean is not close to zero), include a warning.
+  If MDE is extremely small (e.g. < 0.001 or 0.1%) or very large (e.g. > 0.5 or 50%), note that it might lead to impractical sample sizes.
 
-  Output the results in the following JSON format:
+  Output the results in the following JSON format. Ensure requiredSampleSize is an integer.
   {
-    "requiredSampleSize": number,
-    "estimatedTestDuration": number,
-    "confidenceLevel": number,
-    "powerLevel": number,
-    "warnings": string[]
+    "requiredSampleSize": number, // integer, per variant
+    "confidenceLevel": number, // e.g., 0.95 for 95%
+    "powerLevel": number, // e.g., 0.8 for 80%
+    "warnings": string[] // array of warning strings, if any
   }`,
 });
 
 const calculateSampleSizeFlow = ai.defineFlow(
   {
     name: 'calculateSampleSizeFlow',
-    inputSchema: CalculateSampleSizeInputSchema,
-    outputSchema: CalculateSampleSizeOutputSchema,
+    inputSchema: CalculateAIFlowInputSchema,
+    outputSchema: CalculateAIFlowOutputSchema,
   },
-  async (input: CalculateSampleSizeInput): Promise<CalculateSampleSizeOutput> => {
+  async (input: CalculateAIFlowInput): Promise<CalculateAIFlowOutput> => {
     const flowSpecificWarnings: string[] = [];
 
-    if (input.variance > input.mean * 2) {
-      flowSpecificWarnings.push('Warning: The variance is high compared to the mean, which may affect the accuracy of the sample size calculation.');
+    if (input.mean > 0) { // Avoid division by zero if mean is 0 for variance checks
+        if (input.variance > input.mean * 2) {
+        flowSpecificWarnings.push('Warning: The provided variance is relatively high compared to the mean. This will increase the required sample size.');
+        }
+        if (input.variance < input.mean * 0.01 && input.mean > 1e-6) { // check if mean isn't effectively zero
+        flowSpecificWarnings.push('Warning: The provided variance is_very_low_compared_to_the_mean.');
+        }
+    } else if (input.variance > 1000) { // If mean is 0 or negative, high variance is just a large number
+         flowSpecificWarnings.push('Warning: The provided variance is high, and mean is zero or negative. Ensure inputs are correct.');
     }
-    if (input.variance < input.mean * 0.1) {
-      flowSpecificWarnings.push('Warning: The variance is low compared to the mean, which may affect the accuracy of the sample size calculation.');
+    
+    if (input.minimumDetectableEffect < 0.001) { // Less than 0.1% MDE
+        flowSpecificWarnings.push('Warning: The MDE is very small (<0.1%), which may lead to an extremely large required sample size.');
     }
+    if (input.minimumDetectableEffect > 0.5) { // More than 50% MDE
+        flowSpecificWarnings.push('Warning: The MDE is very large (>50%). Ensure this is the intended sensitivity.');
+    }
+
 
     const { output: aiOutput } = await calculateSampleSizePrompt(input);
 
     if (!aiOutput) {
-      // This case should ideally be handled by Genkit/AI plugin error mechanisms,
-      // but as a defensive measure if it somehow results in a null/undefined output object.
       throw new Error("AI model did not return a valid output structure for sample size calculation.");
     }
     
-    // Use requiredSampleSize from AI for duration calculation.
-    // Default to 0 if not a valid number to prevent NaN issues in calculations.
-    const requiredSampleSizeFromAI = typeof aiOutput.requiredSampleSize === 'number' && isFinite(aiOutput.requiredSampleSize) 
-                                     ? aiOutput.requiredSampleSize 
-                                     : 0;
-
-    let calculatedEstimatedTestDuration: number;
-
-    if (requiredSampleSizeFromAI > 0) {
-      // Assumption: input.numberOfUsers is total users over a 30-day period,
-      // consistent with how duration warnings were intended in original flow.
-      const dailyUsers = input.numberOfUsers / 30; 
-
-      if (dailyUsers > 0) {
-        calculatedEstimatedTestDuration = requiredSampleSizeFromAI / dailyUsers;
-        if (calculatedEstimatedTestDuration > 28) { // More than 4 weeks
-          flowSpecificWarnings.push('Warning: Based on the provided user count (assumed over 30 days), the estimated test duration to reach the required sample size is more than 4 weeks.');
-        }
-      } else {
-        flowSpecificWarnings.push('Warning: Daily user count (derived from input over 30 days) is zero or negative. Cannot accurately estimate test duration using flow logic.');
-        // Fallback to AI's estimatedTestDuration if available and valid, otherwise default to 0.
-        calculatedEstimatedTestDuration = typeof aiOutput.estimatedTestDuration === 'number' && isFinite(aiOutput.estimatedTestDuration) 
-                                          ? aiOutput.estimatedTestDuration 
-                                          : 0; 
-      }
-    } else {
-      flowSpecificWarnings.push('Warning: Required sample size from AI is zero, missing, or invalid. Cannot accurately estimate test duration using flow logic.');
-      // Fallback to AI's estimatedTestDuration if available and valid, otherwise default to 0.
-      calculatedEstimatedTestDuration = typeof aiOutput.estimatedTestDuration === 'number' && isFinite(aiOutput.estimatedTestDuration) 
-                                        ? aiOutput.estimatedTestDuration 
-                                        : 0;
-      if (requiredSampleSizeFromAI === 0 && aiOutput.requiredSampleSize === undefined) {
-        flowSpecificWarnings.push('Info: Required sample size from AI is missing.');
-      }
-    }
-    
-    // Ensure the final duration is a finite number to match the schema (z.number()).
-    const finalEstimatedTestDuration = isFinite(calculatedEstimatedTestDuration) ? calculatedEstimatedTestDuration : 0;
+    const finalWarnings = Array.from(new Set([...(aiOutput.warnings || []), ...flowSpecificWarnings]));
 
     return {
-      ...aiOutput, // Spread AI output first (includes its original warnings, requiredSampleSize, estimatedTestDuration etc.)
-      requiredSampleSize: requiredSampleSizeFromAI, // Use the validated/defaulted one from AI
-      estimatedTestDuration: finalEstimatedTestDuration, // Override with potentially more refined flow calculation or fallback
-      confidenceLevel: 1 - input.significanceLevel, // This is correctly calculated from input
-      powerLevel: input.statisticalPower, // This is correctly taken from input
-      // Merge warnings from AI and flow, then deduplicate
-      warnings: Array.from(new Set([...(aiOutput.warnings || []), ...flowSpecificWarnings])), 
+      requiredSampleSize: aiOutput.requiredSampleSize !== undefined ? Math.ceil(aiOutput.requiredSampleSize) : undefined,
+      confidenceLevel: aiOutput.confidenceLevel !== undefined ? aiOutput.confidenceLevel : (1 - input.significanceLevel),
+      powerLevel: aiOutput.powerLevel !== undefined ? aiOutput.powerLevel : input.statisticalPower,
+      warnings: finalWarnings.length > 0 ? finalWarnings : undefined,
     };
   }
 );
-

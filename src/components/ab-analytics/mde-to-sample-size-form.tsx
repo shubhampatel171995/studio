@@ -28,7 +28,7 @@ import { Loader2, AlertTriangle, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { METRIC_OPTIONS, REAL_ESTATE_OPTIONS, DEFAULT_LOOKBACK_DAYS, DEFAULT_MDE_PERCENT, DEFAULT_STATISTICAL_POWER, DEFAULT_SIGNIFICANCE_LEVEL, DURATION_OPTIONS_WEEKS } from "@/lib/constants";
+import { METRIC_OPTIONS, REAL_ESTATE_OPTIONS, DEFAULT_LOOKBACK_DAYS, DEFAULT_MDE_PERCENT, DEFAULT_STATISTICAL_POWER, DEFAULT_SIGNIFICANCE_LEVEL } from "@/lib/constants";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 
@@ -62,31 +62,29 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
     setIsLoading(true);
     onResults(null); 
     try {
-      // Prepare input for the action, which will then call the AI flow
+      // Prepare input for the action by converting MDE % to decimal
       const actionInput = {
         ...values,
-        minimumDetectableEffect: values.minimumDetectableEffect / 100, // Convert MDE from % to decimal for calculation
+        minimumDetectableEffect: values.minimumDetectableEffect, // Keep as percentage for action, action will convert
       };
-      const result = await calculateSampleSizeAction(actionInput);
+      const result = await calculateSampleSizeAction(actionInput); // Pass MdeToSampleSizeFormValues type
       
-      const resultWithFullInputsForReport = {
-        ...result, // result from action (includes AI output + durationEstimates)
-        metric: values.metric,
-        mean: values.mean,
-        variance: values.variance,
-        numberOfUsers: values.numberOfUsers,
-        lookbackDays: values.lookbackDays,
-        realEstate: values.realEstate,
-        minimumDetectableEffect: values.minimumDetectableEffect / 100, // MDE as decimal
-        significanceLevel: values.significanceLevel, // Alpha
-        // confidenceLevel and powerLevel are already in 'result' from action
-      };
-      onResults(resultWithFullInputsForReport);
+      // The result from action already contains all necessary fields for report and display
+      onResults(result);
 
-      toast({
-        title: "Calculation Successful",
-        description: "Required sample size and duration estimates calculated.",
-      });
+      if (result.requiredSampleSize !== undefined || (result.warnings && result.warnings.length > 0) ) {
+        toast({
+            title: "Calculation Successful",
+            description: "Required sample size and duration estimates calculated.",
+        });
+      } else {
+         toast({
+            variant: "destructive",
+            title: "Calculation Incomplete",
+            description: "Could not determine sample size. Please check inputs.",
+        });
+      }
+
     } catch (error) {
       console.error(error);
       onResults(null);
@@ -316,6 +314,13 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
   const dailyUsers = results.numberOfUsers && results.lookbackDays && results.lookbackDays > 0 
                      ? results.numberOfUsers / results.lookbackDays 
                      : 0;
+  
+  // Condition to show the card: if sample size is calculated OR if there are warnings.
+  const shouldShowCard = results.requiredSampleSize !== undefined || (results.warnings && results.warnings.length > 0);
+
+  if (!shouldShowCard) {
+     return null; // Don't render the card if there's nothing to show yet.
+  }
 
   return (
     <Card className="mt-8 w-full shadow-lg">
@@ -323,23 +328,28 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
         <CardTitle className="font-headline text-2xl">MDE to Sample Size Results</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-          <div>
-            <p className="font-medium text-muted-foreground">Required Sample Size (per variant)</p>
-            <p className="text-2xl font-semibold text-primary">{results.requiredSampleSize?.toLocaleString() || 'N/A'}</p>
-          </div>
-          <div>
-            <p className="font-medium text-muted-foreground">Confidence Level</p>
-            <p className="text-lg text-accent">{(results.confidenceLevel && results.confidenceLevel * 100)?.toFixed(0) || 'N/A'}%</p>
-          </div>
-          <div>
-            <p className="font-medium text-muted-foreground">Power Level</p>
-            <p className="text-lg text-accent">{(results.powerLevel && results.powerLevel * 100)?.toFixed(0) || 'N/A'}%</p>
-          </div>
-        </div>
+        {results.requiredSampleSize === undefined && results.warnings && results.warnings.length === 0 && (
+            <p className="text-muted-foreground text-center py-8">Please run the calculation.</p>
+        )}
+        {results.requiredSampleSize !== undefined && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+            <div>
+                <p className="font-medium text-muted-foreground">Required Sample Size (per variant)</p>
+                <p className="text-2xl font-semibold text-primary">{results.requiredSampleSize?.toLocaleString() || 'N/A'}</p>
+            </div>
+            <div>
+                <p className="font-medium text-muted-foreground">Confidence Level</p>
+                <p className="text-lg text-accent">{(results.confidenceLevel && results.confidenceLevel * 100)?.toFixed(0) || 'N/A'}%</p>
+            </div>
+            <div>
+                <p className="font-medium text-muted-foreground">Power Level</p>
+                <p className="text-lg text-accent">{(results.powerLevel && results.powerLevel * 100)?.toFixed(0) || 'N/A'}%</p>
+            </div>
+            </div>
+        )}
         
-        {dailyUsers > 0 && results.durationEstimates && results.durationEstimates.length > 0 && (
-          <div>
+        {dailyUsers > 0 && results.durationEstimates && results.durationEstimates.length > 0 && results.requiredSampleSize !== undefined && (
+          <div className="mt-4">
             <h3 className="font-medium text-lg mb-2">Duration vs. Traffic Availability</h3>
             <p className="text-sm text-muted-foreground mb-3">
               Based on historical daily traffic of ~{Math.round(dailyUsers).toLocaleString()} users for this real estate:
@@ -364,6 +374,9 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
                 ))}
               </TableBody>
             </Table>
+             <p className="text-xs text-muted-foreground mt-2">
+              "Total Users Available" is for both variants. "Sufficient for Test?" checks if this is enough for the "Required Sample Size (per variant)" x 2.
+            </p>
           </div>
         )}
 
@@ -390,3 +403,4 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
     </Card>
   );
 }
+

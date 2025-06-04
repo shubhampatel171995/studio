@@ -3,24 +3,36 @@
 
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SampleSizeCalculatorForm, SampleSizeResultsDisplay } from "@/components/ab-analytics/sample-size-calculator-form";
-import { MdeExplorer } from "@/components/ab-analytics/mde-explorer";
-import { type SampleSizeCalculationResults } from "@/lib/types";
-import { downloadSampleSizeReport } from '@/components/ab-analytics/report-download';
-import { Calculator, Search, BarChartHorizontalBig } from 'lucide-react'; // Using BarChartHorizontalBig as an example icon
+import { MdeToSampleSizeForm, MdeToSampleSizeResultsDisplay } from "@/components/ab-analytics/mde-to-sample-size-form";
+import { SampleSizeToMdeForm, SampleSizeToMdeResultsDisplay } from "@/components/ab-analytics/sample-size-to-mde-form";
+import { type MdeToSampleSizeCalculationResults, type SampleSizeToMdeCalculationResults } from "@/lib/types";
+import { downloadMdeToSampleSizeReport, downloadSampleSizeToMdeReport } from '@/components/ab-analytics/report-download';
+import { Calculator, Search, BarChartHorizontalBig } from 'lucide-react';
 
 export default function ABalyticsPage() {
-  const [calculatorResults, setCalculatorResults] = useState<SampleSizeCalculationResults | null>(null);
+  const [mdeToSampleSizeResults, setMdeToSampleSizeResults] = useState<MdeToSampleSizeCalculationResults | null>(null);
+  const [sampleSizeToMdeResults, setSampleSizeToMdeResults] = useState<SampleSizeToMdeCalculationResults | null>(null);
 
-  const handleCalculatorResults = (results: SampleSizeCalculationResults | null) => {
-    setCalculatorResults(results);
+  const handleMdeToSampleSizeResults = (results: MdeToSampleSizeCalculationResults | null) => {
+    setMdeToSampleSizeResults(results);
   };
 
-  const handleDownloadReport = (results: SampleSizeCalculationResults) => {
+  const handleSampleSizeToMdeResults = (results: SampleSizeToMdeCalculationResults | null) => {
+    setSampleSizeToMdeResults(results);
+  };
+
+  const handleDownloadMdeToSampleSizeReport = (results: MdeToSampleSizeCalculationResults) => {
     if (results) {
-      downloadSampleSizeReport(results);
+      downloadMdeToSampleSizeReport(results);
     }
   };
+
+  const handleDownloadSampleSizeToMdeReport = (results: SampleSizeToMdeCalculationResults) => {
+    if (results) {
+      downloadSampleSizeToMdeReport(results);
+    }
+  };
+
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -34,29 +46,36 @@ export default function ABalyticsPage() {
       </header>
 
       <main className="flex-1 container mx-auto p-4 md:p-8">
-        <Tabs defaultValue="calculator" className="w-full">
+        <Tabs defaultValue="mde-to-sample-size" className="w-full">
           <TabsList className="grid w-full grid-cols-2 md:w-[400px] mb-6 mx-auto md:mx-0">
-            <TabsTrigger value="calculator" className="text-sm md:text-base">
-              <Calculator className="mr-2 h-4 w-4" /> Sample Size Calculator
+            <TabsTrigger value="mde-to-sample-size" className="text-sm md:text-base">
+              <Calculator className="mr-2 h-4 w-4" /> MDE to Sample Size
             </TabsTrigger>
-            <TabsTrigger value="mde-explorer" className="text-sm md:text-base">
-              <Search className="mr-2 h-4 w-4" /> MDE Explorer
+            <TabsTrigger value="sample-size-to-mde" className="text-sm md:text-base">
+              <Search className="mr-2 h-4 w-4" /> Sample Size to MDE
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="calculator">
+          <TabsContent value="mde-to-sample-size">
             <div className="space-y-6">
-              <SampleSizeCalculatorForm 
-                onResults={handleCalculatorResults} 
-                onDownload={handleDownloadReport}
-                currentResults={calculatorResults}
+              <MdeToSampleSizeForm 
+                onResults={handleMdeToSampleSizeResults} 
+                onDownload={handleDownloadMdeToSampleSizeReport}
+                currentResults={mdeToSampleSizeResults}
               />
-              {calculatorResults && <SampleSizeResultsDisplay results={calculatorResults} />}
+              {mdeToSampleSizeResults && <MdeToSampleSizeResultsDisplay results={mdeToSampleSizeResults} />}
             </div>
           </TabsContent>
           
-          <TabsContent value="mde-explorer">
-            <MdeExplorer />
+          <TabsContent value="sample-size-to-mde">
+             <div className="space-y-6">
+              <SampleSizeToMdeForm
+                onResults={handleSampleSizeToMdeResults}
+                onDownload={handleDownloadSampleSizeToMdeReport}
+                currentResults={sampleSizeToMdeResults}
+              />
+              {sampleSizeToMdeResults && <SampleSizeToMdeResultsDisplay results={sampleSizeToMdeResults} />}
+            </div>
           </TabsContent>
         </Tabs>
       </main>
