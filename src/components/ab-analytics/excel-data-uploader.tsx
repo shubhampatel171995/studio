@@ -75,8 +75,8 @@ export function ExcelDataUploader() {
       }
     };
     reader.onerror = () => {
+      setIsLoading(false);
       toast({ variant: "destructive", title: "Error reading file" });
-      setSheetHeaders([]);
     };
     reader.readAsArrayBuffer(selectedFile);
   };
@@ -213,6 +213,11 @@ export function ExcelDataUploader() {
               </div>
             ))}
           </CardContent>
+          <CardFooter>
+            <p className="text-xs text-muted-foreground">
+              Note: Ensure columns intended for numeric values (Mean, Variance, Lookback Days, Total Users) contain only numbers in your file to avoid processing errors.
+            </p>
+          </CardFooter>
         </Card>
       )}
 

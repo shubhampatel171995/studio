@@ -32,8 +32,6 @@ import {
     DEFAULT_SIGNIFICANCE_LEVEL, 
     METRIC_TYPE_OPTIONS,
 } from "@/lib/constants";
-// Table related imports are removed
-// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { downloadManualCalculatorReport } from "@/components/ab-analytics/report-download";
 
@@ -183,9 +181,9 @@ export function ManualCalculatorForm() {
                   <FormItem>
                     <FormLabel>Minimum Detectable Effect (MDE %)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 2 for 2%" {...field} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any"/>
+                      <Input type="number" placeholder="e.g., 2 for 2%" {...field} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" value={isNaN(field.value) ? '' : field.value}/>
                     </FormControl>
-                    <FormDescription>Enter as a percentage, e.g., 2 for 2%.</FormDescription>
+                    <FormDescription className="text-xs">Enter as a percentage, e.g., 2 for 2%.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -205,7 +203,7 @@ export function ManualCalculatorForm() {
                     <FormControl>
                     <Input type="number" placeholder={metricType === 'Binary' ? "e.g., 0.1 for 10%" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" />
                     </FormControl>
-                    <FormDescription>{metricType === 'Binary' ? "For binary, enter proportion (0-1)." : "Baseline average."}</FormDescription>
+                    <FormDescription className="text-xs">{metricType === 'Binary' ? "For binary, enter proportion (0-1)." : "Baseline average."}</FormDescription>
                     <FormMessage />
                 </FormItem>
                 )}
@@ -219,7 +217,7 @@ export function ManualCalculatorForm() {
                     <FormControl>
                     <Input type="number" placeholder="e.g., 0.09" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" readOnly={metricType === 'Binary' && !isNaN(mean) && mean >=0 && mean <=1}/>
                     </FormControl>
-                    <FormDescription>{metricType === 'Binary' ? "Auto-calculated as p*(1-p) if Mean is valid proportion. Editable." : "Enter metric variance."}</FormDescription>
+                    <FormDescription className="text-xs">{metricType === 'Binary' ? "Auto-calculated as p*(1-p) if Mean is valid proportion. Editable." : "Enter metric variance."}</FormDescription>
                     <FormMessage />
                 </FormItem>
                 )}
@@ -239,7 +237,7 @@ export function ManualCalculatorForm() {
                     <FormControl>
                       <Input type="number" placeholder="e.g., 5000" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} />
                     </FormControl>
-                    <FormDescription>Average daily users for traffic estimates.</FormDescription>
+                    <FormDescription className="text-xs">Average daily users for traffic estimates.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -253,7 +251,7 @@ export function ManualCalculatorForm() {
                     <FormControl>
                       <Input type="number" placeholder="e.g., 14" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} />
                     </FormControl>
-                     <FormDescription>How long you plan to run the experiment.</FormDescription>
+                     <FormDescription className="text-xs">How long you plan to run the experiment.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -273,7 +271,7 @@ export function ManualCalculatorForm() {
                     <FormControl>
                     <Input type="number" placeholder="e.g., 0.8" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="0.01" min="0.01" max="0.99" />
                     </FormControl>
-                    <FormDescription>Typically 0.8 (80%). Value between 0.01 and 0.99.</FormDescription>
+                    <FormDescription className="text-xs">Typically 0.8 (80%). Value between 0.01 and 0.99.</FormDescription>
                     <FormMessage />
                 </FormItem>
                 )}
@@ -287,7 +285,7 @@ export function ManualCalculatorForm() {
                     <FormControl>
                     <Input type="number" placeholder="e.g., 0.05" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="0.01" min="0.01" max="0.99" />
                     </FormControl>
-                    <FormDescription>Typically 0.05 (5%). Value between 0.01 and 0.99.</FormDescription>
+                    <FormDescription className="text-xs">Typically 0.05 (5%). Value between 0.01 and 0.99.</FormDescription>
                     <FormMessage />
                 </FormItem>
                 )}
@@ -372,7 +370,6 @@ export function ManualCalculatorResultsDisplay({ results, targetDurationDays }: 
             </div>
         )}
         
-        {/* Duration vs. Traffic Availability Table Removed */}
          {targetDurationDays && dailyUsers > 0 && results.requiredSampleSize && results.requiredSampleSize > 0 && targetDurationInfo.usersAvailable !== undefined && (
                 <div className={cn("text-sm mb-3 p-3 rounded-md shadow", 
                                  targetDurationInfo.isSufficient ? "bg-green-100 text-green-800 border border-green-200" : "bg-red-100 text-red-800 border border-red-200")}>
@@ -408,3 +405,4 @@ export function ManualCalculatorResultsDisplay({ results, targetDurationDays }: 
     </Card>
   );
 }
+

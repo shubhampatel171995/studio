@@ -65,7 +65,7 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
       } else if (resultAction.warnings && resultAction.warnings.length > 0) {
          toast({
           title: "Calculation Notice",
-          description: resultAction.warnings.join(' '),
+          description: resultAction.warnings.join(' ').replace(/_/g, ' '),
         });
       } else {
          toast({
@@ -152,13 +152,13 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <FormField control={form.control} name="sampleSizePerVariant" render={({ field }) => (
-                  <FormItem><FormLabel>Sample Size (per variant)</FormLabel><FormControl><Input type="number" placeholder="e.g., 50000" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Sample Size (per variant)</FormLabel><FormControl><Input type="number" placeholder="e.g., 50000" {...field} value={isNaN(field.value) ? '' : field.value} /></FormControl><FormMessage /></FormItem>
               )}/>
               <FormField control={form.control} name="mean" render={({ field }) => (
-                  <FormItem><FormLabel>Mean (Historical)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.15" {...field} step="any"/></FormControl><FormDescription>Needed for relative MDE.</FormDescription><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Mean (Historical)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.15" {...field} step="any" value={isNaN(field.value) ? '' : field.value}/></FormControl><FormDescription className="text-xs">Needed for relative MDE.</FormDescription><FormMessage /></FormItem>
               )}/>
               <FormField control={form.control} name="variance" render={({ field }) => (
-                  <FormItem><FormLabel>Variance (Historical)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.1275" {...field} step="any"/></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Variance (Historical)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.1275" {...field} step="any" value={isNaN(field.value) ? '' : field.value}/></FormControl><FormMessage /></FormItem>
               )}/>
             </div>
 
@@ -167,10 +167,10 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField control={form.control} name="statisticalPower" render={({ field }) => (
-                  <FormItem><FormLabel>Statistical Power (1 - β)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.8" {...field} step="0.01" min="0.01" max="0.99" /></FormControl><FormDescription>Typically 0.8 (80%).</FormDescription><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Statistical Power (1 - β)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.8" {...field} step="0.01" min="0.01" max="0.99" value={isNaN(field.value) ? '' : field.value} /></FormControl><FormDescription className="text-xs">Typically 0.8 (80%).</FormDescription><FormMessage /></FormItem>
               )}/>
               <FormField control={form.control} name="significanceLevel" render={({ field }) => (
-                  <FormItem><FormLabel>Significance Level (α)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.05" {...field} step="0.01" min="0.01" max="0.99" /></FormControl><FormDescription>Typically 0.05 (5%).</FormDescription><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Significance Level (α)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.05" {...field} step="0.01" min="0.01" max="0.99" value={isNaN(field.value) ? '' : field.value} /></FormControl><FormDescription className="text-xs">Typically 0.05 (5%).</FormDescription><FormMessage /></FormItem>
               )}/>
             </div>
             <div className="flex flex-col sm:flex-row gap-4 pt-2">
@@ -196,12 +196,10 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
 
   const { achievableMde, warnings, confidenceLevel, powerLevel } = results;
 
-  // Condition to show the card: if MDE is calculated OR if there are warnings.
-  // If neither, it means no calculation was run or it resulted in nothing (which shouldn't happen if form is submitted).
   const shouldShowCard = achievableMde !== undefined || (warnings && warnings.length > 0);
 
   if (!shouldShowCard) {
-     return null; // Don't render the card if there's nothing to show yet.
+     return null; 
   }
 
 
@@ -244,7 +242,7 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
             </h3>
             <ul className="list-disc list-inside space-y-1 pl-2 text-destructive-foreground bg-destructive/10 p-3 rounded-md">
               {warnings.map((warning, index) => (
-                <li key={index} className="text-sm">{warning}</li>
+                <li key={index} className="text-sm">{warning.replace(/_/g, ' ')}</li>
               ))}
             </ul>
           </div>
