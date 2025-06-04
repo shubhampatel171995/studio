@@ -4,38 +4,22 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// import { MdeToSampleSizeForm, MdeToSampleSizeResultsDisplay } from "@/components/ab-analytics/mde-to-sample-size-form";
-// import { SampleSizeToMdeForm, SampleSizeToMdeResultsDisplay } from "@/components/ab-analytics/sample-size-to-mde-form";
 import { FixedDurationCalculatorForm, FixedDurationCalculatorResultsDisplay } from "@/components/ab-analytics/fixed-duration-calculator-form";
 import { MdeDurationPredictorForm, MdeDurationPredictorResultsDisplay } from '@/components/ab-analytics/mde-duration-predictor-form';
 import { 
-    type MdeToSampleSizeCalculationResults, // Keep for manual calculator and dynamic duration
-    type SampleSizeToMdeCalculationResults, 
     type MdeDurationPredictorResultRow,
     type FixedDurationCalculatorResults
 } from "@/lib/types";
 import { 
-    downloadMdeToSampleSizeReport, 
-    downloadSampleSizeToMdeReport,
     downloadFixedDurationCalculatorReport, 
     downloadMdeDurationPredictorReport 
 } from '@/components/ab-analytics/report-download';
-import { Calculator, Search, UploadCloud, NotebookPen, Clock } from 'lucide-react';
+import { Calculator, UploadCloud, NotebookPen, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function ABalyticsPage() {
-  // const [mdeToSampleSizeResults, setMdeToSampleSizeResults] = useState<MdeToSampleSizeCalculationResults | null>(null);
-  // const [sampleSizeToMdeResults, setSampleSizeToMdeResults] = useState<SampleSizeToMdeCalculationResults | null>(null);
   const [fixedDurationCalculatorResults, setFixedDurationCalculatorResults] = useState<FixedDurationCalculatorResults | null>(null);
   const [mdeDurationPredictorResults, setMdeDurationPredictorResults] = useState<MdeDurationPredictorResultRow[] | null>(null);
-
-  // const handleMdeToSampleSizeResults = (results: MdeToSampleSizeCalculationResults | null) => {
-  //   setMdeToSampleSizeResults(results);
-  // };
-
-  // const handleSampleSizeToMdeResults = (results: SampleSizeToMdeCalculationResults | null) => {
-  //   setSampleSizeToMdeResults(results);
-  // };
 
   const handleFixedDurationCalculatorResults = (results: FixedDurationCalculatorResults | null) => {
     setFixedDurationCalculatorResults(results);
@@ -52,12 +36,12 @@ export default function ABalyticsPage() {
   };
 
   const handleDownloadMdeDurationPredictorReport = () => {
-    if (mdeDurationPredictorResults && fixedDurationCalculatorResults?.inputs) { // Need some form values for the report
-        const formValuesForReport = { // Construct a compatible MdeDurationPredictorFormValues
+    if (mdeDurationPredictorResults && fixedDurationCalculatorResults?.inputs) { 
+        const formValuesForReport = { 
             metric: fixedDurationCalculatorResults.inputs.metric,
             realEstate: fixedDurationCalculatorResults.inputs.realEstate,
             metricType: fixedDurationCalculatorResults.inputs.metricType,
-            minimumDetectableEffect: fixedDurationCalculatorResults.inputs.minimumDetectableEffect || 0, // Default if not present
+            minimumDetectableEffect: fixedDurationCalculatorResults.inputs.minimumDetectableEffect || 0, 
             statisticalPower: fixedDurationCalculatorResults.inputs.statisticalPower,
             significanceLevel: fixedDurationCalculatorResults.inputs.significanceLevel,
             numberOfVariants: fixedDurationCalculatorResults.inputs.numberOfVariants,
@@ -122,7 +106,7 @@ export default function ABalyticsPage() {
       <footer className="py-6 md:px-8 md:py-0 border-t">
         <div className="container flex flex-col items-center justify-center gap-4 md:h-20 md:flex-row">
           <p className="text-sm leading-loose text-muted-foreground text-center">
-            Powered by Statistical Insights. For Meesho Experimentation Platform.
+            ABalytics - A/B Test Sample Size & Duration Estimator
           </p>
         </div>
       </footer>

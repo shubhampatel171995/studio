@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 
 interface FixedDurationCalculatorFormProps {
   onResults: (results: FixedDurationCalculatorResults | null) => void;
-  onDownload: () => void; // Adjusted as download function is in page.tsx
+  onDownload: () => void; 
   currentResults: FixedDurationCalculatorResults | null;
 }
 
@@ -67,8 +67,8 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
       mean: NaN, 
       variance: NaN, 
       realEstate: 'platform',
-      minimumDetectableEffect: undefined, // Start empty
-      sampleSizePerVariant: undefined, // Start empty
+      minimumDetectableEffect: undefined, 
+      sampleSizePerVariant: undefined, 
       statisticalPower: DEFAULT_STATISTICAL_POWER,
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
       targetExperimentDurationDays: 14,
@@ -238,7 +238,7 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
     const value = e.target.value;
     form.setValue("minimumDetectableEffect", value === "" ? undefined : Number(value), {shouldValidate: true});
     if (value !== "" && activeInputField === 'mde') {
-      form.setValue("sampleSizePerVariant", undefined, {shouldValidate: false}); // Clear other field
+      form.setValue("sampleSizePerVariant", undefined, {shouldValidate: false}); 
     }
     onResults(null);
   };
@@ -247,7 +247,7 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
     const value = e.target.value;
     form.setValue("sampleSizePerVariant", value === "" ? undefined : Number(value), {shouldValidate: true});
     if (value !== "" && activeInputField === 'sampleSize') {
-      form.setValue("minimumDetectableEffect", undefined, {shouldValidate: false}); // Clear other field
+      form.setValue("minimumDetectableEffect", undefined, {shouldValidate: false}); 
     }
     onResults(null);
   };
@@ -262,7 +262,7 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
         submissionValues.sampleSizePerVariant = undefined;
     } else if (activeInputField === 'sampleSize' && values.sampleSizePerVariant && values.sampleSizePerVariant > 0) {
         submissionValues.minimumDetectableEffect = undefined;
-    } else if (values.minimumDetectableEffect && values.minimumDetectableEffect > 0) { // Default if no active focus, MDE takes precedence
+    } else if (values.minimumDetectableEffect && values.minimumDetectableEffect > 0) { 
         submissionValues.sampleSizePerVariant = undefined;
     } else if (values.sampleSizePerVariant && values.sampleSizePerVariant > 0) {
         submissionValues.minimumDetectableEffect = undefined;
@@ -453,7 +453,7 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
                     </FormItem>)} />
                  <FormField control={form.control} name="totalUsersInSelectedDuration" render={({ field }) => (
                       <FormItem>
-                          <FormLabel>Total Users for Exp Duration ({targetExperimentDuration || 'N/A'} days)</FormLabel>
+                          <FormLabel>Total Users ({targetExperimentDuration || 'N/A'} Days)</FormLabel>
                           <FormControl><Input type="number" placeholder="e.g., 70000" {...field} value={isNaN(field.value ?? NaN) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isHistoricalFieldReadOnly) {setIsHistoricalFieldReadOnly(false);}}} readOnly={isHistoricalFieldReadOnly} /></FormControl>
                           {!isHistoricalFieldReadOnly && <FormDescription className="text-xs">Total unique users for duration.</FormDescription>}
                           <FormMessage />
