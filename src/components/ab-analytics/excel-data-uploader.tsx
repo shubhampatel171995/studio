@@ -57,6 +57,11 @@ export function ExcelDataUploader() {
     reader.onload = (e) => {
       try {
         const data = e.target?.result;
+        if (!data) {
+          toast({ variant: "destructive", title: "Error reading file", description: "File content appears to be empty or unreadable." });
+          setSheetHeaders([]);
+          return;
+        }
         const workbook = XLSX.read(data, { type: 'array', sheetRows: 1 }); // Read only the first row for headers
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
@@ -65,7 +70,7 @@ export function ExcelDataUploader() {
          toast({ title: "File headers parsed", description: "Please map your columns below." });
       } catch (error) {
         console.error("Error parsing Excel headers:", error);
-        toast({ variant: "destructive", title: "Error parsing headers", description: "Could not read column headers from the file. Is it a valid Excel/CSV?" });
+        toast({ variant: "destructive", title: "Error parsing headers", description: "Could not read column headers. The file might be corrupted, not a valid Excel/CSV, or in an unsupported format." });
         setSheetHeaders([]);
       }
     };
@@ -97,6 +102,11 @@ export function ExcelDataUploader() {
     reader.onload = (e) => {
       try {
         const data = e.target?.result;
+        if (!data) {
+          toast({ variant: "destructive", title: "Error processing file", description: "File content appears to be empty or unreadable." });
+          setIsLoading(false);
+          return;
+        }
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
@@ -143,12 +153,15 @@ export function ExcelDataUploader() {
         router.push('/'); // Navigate to the main calculator page
       } catch (error) {
         console.error("Error processing Excel file:", error);
-        toast({ variant: "destructive", title: "Error processing file", description: "Could not process the data. Please check the file format and mapping." });
+        toast({ variant: "destructive", title: "Error processing file", description: "Could not process the data. The file might be corrupted or in an unsupported format. Please check the file and mapping." });
       } finally {
         setIsLoading(false);
       }
     };
-    reader.onerror = () => setIsLoading(false);
+    reader.onerror = () => {
+      setIsLoading(false);
+      toast({ variant: "destructive", title: "Error reading file" });
+    };
     reader.readAsArrayBuffer(file);
   };
 
@@ -215,3 +228,4 @@ export function ExcelDataUploader() {
     </div>
   );
 }
+
