@@ -10,10 +10,11 @@ export function downloadMdeToSampleSizeReport(results: MdeToSampleSizeCalculatio
   let reportContent = "ABalytics - MDE to Sample Size Report (Excel/Platform Data)\n\n";
   reportContent += "Inputs:\n";
   reportContent += `- Metric: ${results.metric || 'N/A'}\n`;
+  reportContent += `- Metric Type: ${results.metricType || 'N/A'}\n`;
   reportContent += `- Real Estate: ${results.realEstate || 'N/A'}\n`;
   reportContent += `- Target MDE: ${formatNumber(results.minimumDetectableEffect ? results.minimumDetectableEffect * 100 : null, 2)}%\n`;
   reportContent += `- Mean (Historical): ${formatNumber(results.mean, 4)}\n`;
-  reportContent += `- Variance (Historical): ${formatNumber(results.variance, 4)}\n`;
+  reportContent += `- Variance (Historical): ${formatNumber(results.variance, 6)}\n`;
   if (results.numberOfUsers !== undefined && results.lookbackDays !== undefined) {
     reportContent += `- Number of Users (in Lookback): ${formatNumber(results.numberOfUsers)}\n`;
     reportContent += `- Lookback Days: ${formatNumber(results.lookbackDays)}\n`;
@@ -122,7 +123,7 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
     });
     reportContent += "\n";
 
-    if (results.targetExperimentDurationDays && results.requiredSampleSize) {
+    if (results.targetExperimentDurationDays && results.requiredSampleSize && results.historicalDailyTraffic) {
         const usersInTarget = results.historicalDailyTraffic * results.targetExperimentDurationDays;
         const isSufficientInTarget = usersInTarget >= results.requiredSampleSize * 2;
         reportContent += `For your target duration of ${results.targetExperimentDurationDays} days:\n`;

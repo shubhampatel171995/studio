@@ -8,24 +8,25 @@ import { Z_ALPHA_DIV_2, Z_BETA, DURATION_OPTIONS_WEEKS } from '@/lib/constants';
 // Action for "MDE to Sample Size" flow (used by both Excel-driven and Manual calculators)
 export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormValues): Promise<MdeToSampleSizeCalculationResults> {
   const { 
-    metric, // Name of the metric (e.g., from Excel or "Manual - Binary")
+    metric, 
+    metricType,
     mean, 
     variance, 
-    numberOfUsers, // From Excel flow, or dummy for manual
-    lookbackDays,  // From Excel flow, or dummy for manual
-    realEstate,    // From Excel flow, or "Manual Input"
+    numberOfUsers, 
+    lookbackDays,  
+    realEstate,    
     minimumDetectableEffect, // This is MDE % from form
     statisticalPower, 
     significanceLevel,
-    historicalDailyTraffic, // Directly from Manual Calculator form
-    inputType, // To differentiate logic if needed, though historicalDailyTraffic is primary flag now
+    historicalDailyTraffic, 
   } = formValues;
 
   const localWarnings: string[] = [];
 
   try {
     const aiInput: CalculateAIFlowInput = {
-      metric, // Pass metric name for AI context
+      metric, 
+      metricType,
       mean,
       variance,
       minimumDetectableEffect: minimumDetectableEffect / 100, // Convert MDE % to decimal for AI
@@ -90,14 +91,15 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
       durationEstimates: durationEstimates,
       // Pass through original form values for comprehensive report
       metric,
+      metricType,
       mean,
       variance,
-      numberOfUsers, // Keep for reporting if available
-      lookbackDays,  // Keep for reporting if available
+      numberOfUsers, 
+      lookbackDays,  
       realEstate,
       minimumDetectableEffect: minimumDetectableEffect / 100, // MDE as decimal
       significanceLevel,
-      historicalDailyTraffic, // Keep for reporting if available
+      historicalDailyTraffic, 
     };
 
   } catch (error) {

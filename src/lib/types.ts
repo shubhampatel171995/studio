@@ -13,16 +13,34 @@ import {
 // Schema for "MDE to Sample Size" flow (Excel/Platform Data Driven)
 export const MdeToSampleSizeFormSchema = z.object({
   metric: z.string().min(1, "Metric is required"),
-  mean: z.coerce.number({invalid_type_error: "Mean must be a number"}).positive("Mean must be a positive number when provided"),
-  variance: z.coerce.number({invalid_type_error: "Variance must be a number"}).nonnegative("Variance must be a non-negative number when provided"),
-  numberOfUsers: z.coerce.number({invalid_type_error: "Number of users must be a number"}).int().positive("Number of users must be a positive integer when provided"),
-  lookbackDays: z.coerce.number().int().positive("Lookback days must be a positive integer").default(DEFAULT_LOOKBACK_DAYS),
+  metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }).default(METRIC_TYPE_OPTIONS[1]), // Default to Continuous
+  mean: z.coerce.number({invalid_type_error: "Mean must be a number"}).refine(val => !isNaN(val), "Mean must be a valid number"),
+  variance: z.coerce.number({invalid_type_error: "Variance must be a number"}).nonnegative("Variance must be a non-negative number"),
+  numberOfUsers: z.coerce.number({invalid_type_error: "Number of users must be a number"}).int().positive("Number of users must be a positive integer when provided").optional(), // Optional as it can come from Excel
+  lookbackDays: z.coerce.number().int().positive("Lookback days must be a positive integer").default(DEFAULT_LOOKBACK_DAYS).optional(), // Optional as it can come from Excel
   realEstate: z.string().min(1, "Real Estate is required"),
   minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be a positive number").default(DEFAULT_MDE_PERCENT),
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
   historicalDailyTraffic: z.coerce.number().optional(), // For manual calculator passthrough
-});
+}).refine(data => {
+    if (data.metricType === "Binary") {
+      return data.mean >= 0 && data.mean <= 1;
+    }
+    return true;
+  }, {
+    message: "For Binary metrics, Mean (proportion) must be between 0 and 1.",
+    path: ["mean"],
+  }).refine(data => {
+    if (data.metricType === "Continuous" && data.mean <=0) {
+        return false;
+    }
+    return true;
+  }, {
+    message: "For Continuous metrics, Mean must be positive.",
+    path: ["mean"],
+  });
+
 
 export type MdeToSampleSizeFormValues = z.infer<typeof MdeToSampleSizeFormSchema>;
 
@@ -46,12 +64,12 @@ export const ManualCalculatorFormSchema = z.object({
     message: "For Binary metrics, Mean (proportion) must be between 0 and 1.",
     path: ["mean"],
   }).refine(data => { // Conditional validation for mean > 0 for non-binary
-    if (data.metricType === "Continuous" || data.metricType === "Non-Binary") { // Assuming "Continuous" or "Non-Binary"
+    if (data.metricType === "Continuous") { 
         return data.mean > 0;
     }
     return true;
   }, {
-    message: "For Continuous/Non-Binary metrics, Mean must be positive.",
+    message: "For Continuous metrics, Mean must be positive.",
     path: ["mean"],
 });
 
@@ -74,6 +92,7 @@ export type CalculateAIFlowOutput = CalculateAIFlowOutputInternal;
 export type MdeToSampleSizeCalculationResults = CalculateAIFlowOutput & {
   // Inputs from form (passed through for reporting and context)
   metric: string; // Could be "Metric Name - Real Estate" or "Manual - MetricType"
+  metricType: typeof METRIC_TYPE_OPTIONS[number];
   mean: number;
   variance: number;
   numberOfUsers?: number; // May not be relevant for manual calc if historicalDailyTraffic is used
@@ -83,7 +102,6 @@ export type MdeToSampleSizeCalculationResults = CalculateAIFlowOutput & {
   significanceLevel: number; // Alpha from form
   
   // Specific to manual calculator results, optional for Excel-based
-  metricType?: typeof METRIC_TYPE_OPTIONS[number];
   historicalDailyTraffic?: number;
   targetExperimentDurationDays?: number;
 
@@ -117,6 +135,7 @@ export interface SampleSizeToMdeCalculationResults {
 // Input type for the AI flow (used by "MDE to Sample Size" action)
 export type CalculateAIFlowInput = {
   metric: string; 
+  metricType: typeof METRIC_TYPE_OPTIONS[number];
   mean: number;
   variance: number;
   minimumDetectableEffect: number; // MDE as decimal
