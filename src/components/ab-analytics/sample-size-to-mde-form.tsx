@@ -273,7 +273,7 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
     <Card className="w-full shadow-lg">
       <CardHeader className="flex flex-row items-start justify-between">
         <div>
-            <CardTitle className="font-headline text-2xl">Sample Size to MDE Inputs</CardTitle>
+            <CardTitle className="font-headline text-2xl">Sample Size to MDE</CardTitle>
             <p className="text-muted-foreground text-xs mt-1">
                 {!uploadedFileName ? 'Enter parameters or upload a data file via "Upload & Map Data" for auto-fill.' : 'Select Metric, Real Estate, and Exp Duration to auto-fill historical data.'}
             </p>

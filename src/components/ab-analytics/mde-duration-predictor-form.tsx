@@ -39,6 +39,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { downloadMdeDurationPredictorReport } from "@/components/ab-analytics/report-download";
+import { cn } from "@/lib/utils";
 
 interface MdeDurationPredictorFormProps {
   onResults: (results: MdeDurationPredictorResultRow[] | null) => void;
@@ -70,8 +71,8 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
   });
 
   const selectedMetric = form.watch("metric");
-  const selectedRealEstate = form.watch("realEstate");
-  const selectedMetricType = form.watch("metricType");
+  // const selectedRealEstate = form.watch("realEstate");
+  // const selectedMetricType = form.watch("metricType");
 
 
   useEffect(() => {
@@ -245,8 +246,9 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
                 <div className="flex justify-end">
                     <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
                         <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                                <SettingsIcon className="mr-2 h-4 w-4" /> Statistical Settings
+                             <Button variant="outline" size="icon">
+                                <SettingsIcon className="h-5 w-5" />
+                                <span className="sr-only">Open Statistical Settings</span>
                             </Button>
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-[425px]">
@@ -353,18 +355,26 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
     return null;
   }
 
-  const formatCell = (value: number | string | undefined, isPercentage = false, isLargeNumber = false) => {
-    if (value === undefined || value === null || value === 'N/A' || value === 'Error' || (typeof value === 'number' && isNaN(value))) {
-      return <span className="text-muted-foreground">{value === undefined || (typeof value === 'number' && isNaN(value)) ? 'N/A' : String(value)}</span>;
+ const formatCell = (value: number | string | undefined, isPercentage = false, isLargeNumber = false, precision = isPercentage ? 1 : (isLargeNumber ? 0 : 4) ) => {
+    if (value === undefined || value === null || (typeof value === 'number' && isNaN(value))) {
+      return <span className="text-muted-foreground">N/A</span>;
     }
+    if (value === 'Error') {
+      return <span className="text-destructive">Error</span>;
+    }
+     if (value === 'N/A') {
+      return <span className="text-muted-foreground">N/A</span>;
+    }
+
     if (typeof value === 'number') {
-      if (isLargeNumber) return value.toLocaleString();
-      const numStr = isPercentage ? `${value.toFixed(1)}%` : value.toFixed(4); // Keep precision for mean/variance
-      if (value > 1000 && isPercentage && (value !== Infinity) ) return '>1000%';
-      if(value === Infinity && isPercentage) return '∞%';
-      return numStr;
+      if (isPercentage) {
+        if (value === Infinity) return '∞%';
+        if (value > 1000) return '>1000%';
+        return `${value.toFixed(precision)}%`;
+      }
+      return value.toLocaleString(undefined, {minimumFractionDigits: precision, maximumFractionDigits: precision});
     }
-    return String(value);
+    return String(value); // Should not happen if types are correct
   };
 
 
@@ -374,44 +384,58 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
         <CardTitle className="font-headline text-2xl">Duration Predictions</CardTitle>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Duration (Days)</TableHead>
-              <TableHead>Mean Used</TableHead>
-              <TableHead>Variance Used</TableHead>
-              <TableHead>Total Users Available</TableHead>
-              <TableHead>Req. Sample Size (per variant)</TableHead>
-              <TableHead>Total Req. Sample Size</TableHead>
-              <TableHead>Exposure Needed (%)</TableHead>
-              <TableHead>Notices</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {results.map((row, index) => (
-              <TableRow key={index}>
-                <TableCell className="font-medium">{row.duration}</TableCell>
-                <TableCell>{formatCell(row.meanUsed, false)}</TableCell>
-                <TableCell>{formatCell(row.varianceUsed, false)}</TableCell>
-                <TableCell>{formatCell(row.totalUsersAvailable, false, true)}</TableCell>
-                <TableCell className="text-primary font-semibold">{formatCell(row.requiredSampleSizePerVariant, false, true)}</TableCell>
-                <TableCell className="text-primary font-semibold">{formatCell(row.totalRequiredSampleSize, false, true)}</TableCell>
-                <TableCell className="text-primary font-semibold">{formatCell(row.exposureNeededPercentage, true)}</TableCell>
-                <TableCell>
-                  {row.warnings && row.warnings.length > 0 && (
-                    <ul className="list-disc list-inside text-xs space-y-0.5">
-                      {row.warnings.map((warn, i) => (
-                        <li key={i} className={warn.toLowerCase().includes("error") || warn.toLowerCase().includes("cannot estimate") || warn.toLowerCase().includes("not found") ? "text-destructive" : "text-muted-foreground"}>
-                          {warn.replace(/_/g, ' ')}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </TableCell>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[100px]">Duration (Days)</TableHead>
+                <TableHead className="min-w-[120px]">Mean Used</TableHead>
+                <TableHead className="min-w-[120px]">Variance Used</TableHead>
+                <TableHead className="min-w-[150px]">Total Users Available</TableHead>
+                <TableHead className="min-w-[180px]">Req. Sample Size (per variant)</TableHead>
+                <TableHead className="min-w-[180px]">Total Req. Sample Size</TableHead>
+                <TableHead className="min-w-[150px]">Exposure Needed (%)</TableHead>
+                <TableHead className="min-w-[200px]">Notices</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {results.map((row, index) => (
+                <TableRow key={index}>
+                  <TableCell className="font-medium">{row.duration}</TableCell>
+                  <TableCell>{formatCell(row.meanUsed, false, false, 4)}</TableCell>
+                  <TableCell>{formatCell(row.varianceUsed, false, false, 6)}</TableCell>
+                  <TableCell>{formatCell(row.totalUsersAvailable, false, true)}</TableCell>
+                  <TableCell 
+                    className={cn(typeof row.requiredSampleSizePerVariant === 'number' ? "text-primary font-semibold" : "text-muted-foreground")}
+                  >
+                    {formatCell(row.requiredSampleSizePerVariant, false, true)}
+                  </TableCell>
+                  <TableCell 
+                     className={cn(typeof row.totalRequiredSampleSize === 'number' ? "text-primary font-semibold" : "text-muted-foreground")}
+                  >
+                    {formatCell(row.totalRequiredSampleSize, false, true)}
+                  </TableCell>
+                  <TableCell 
+                     className={cn(typeof row.exposureNeededPercentage === 'number' ? "text-primary font-semibold" : "text-muted-foreground")}
+                  >
+                    {formatCell(row.exposureNeededPercentage, true)}
+                  </TableCell>
+                  <TableCell>
+                    {row.warnings && row.warnings.length > 0 ? (
+                      <ul className="list-disc list-inside text-xs space-y-0.5">
+                        {row.warnings.map((warn, i) => (
+                          <li key={i} className={warn.toLowerCase().includes("error") || warn.toLowerCase().includes("cannot estimate") || warn.toLowerCase().includes("not found") ? "text-destructive" : "text-muted-foreground"}>
+                            {warn.replace(/_/g, ' ')}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <span className="text-muted-foreground text-xs">-</span> }
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );

@@ -9,7 +9,7 @@ import { SampleSizeToMdeForm, SampleSizeToMdeResultsDisplay } from "@/components
 import { MdeDurationPredictorForm, MdeDurationPredictorResultsDisplay } from '@/components/ab-analytics/mde-duration-predictor-form';
 import { type MdeToSampleSizeCalculationResults, type SampleSizeToMdeCalculationResults, type MdeDurationPredictorResultRow } from "@/lib/types";
 import { downloadMdeToSampleSizeReport, downloadSampleSizeToMdeReport } from '@/components/ab-analytics/report-download';
-import { Calculator, Search, BarChartHorizontalBig, UploadCloud, NotebookPen, Clock } from 'lucide-react';
+import { Calculator, Search, UploadCloud, NotebookPen, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
@@ -46,13 +46,8 @@ export default function ABalyticsPage() {
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center">
-            <BarChartHorizontalBig className="h-8 w-8 mr-3 text-primary" />
-            <h1 className="text-3xl font-bold font-headline tracking-tight text-foreground">
-              ABalytics
-            </h1>
-          </div>
+        <div className="container flex h-16 items-center justify-end"> {/* Adjusted justify-content */}
+          {/* Removed ABalytics Name and Logo */}
           <div className="flex items-center gap-2">
             <Button asChild variant="outline">
               <Link href="/manual-calculator">
@@ -110,7 +105,7 @@ export default function ABalyticsPage() {
                 <CardHeader>
                   <CardTitle className="font-headline text-2xl">MDE to Duration Predictor</CardTitle>
                   <CardDescription>
-                    Enter your experiment parameters. The calculator will predict sample size and exposure for various durations (7, 14, 21, 30 days). Upload an Excel file via "Upload & Map Data" on the main page to auto-fill historical data for selected metrics and real estate.
+                    Enter experiment parameters. The calculator will predict sample size and exposure for 7, 14, 21, and 30 day durations using data from your uploaded file.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -135,3 +130,4 @@ export default function ABalyticsPage() {
     </div>
   );
 }
+
