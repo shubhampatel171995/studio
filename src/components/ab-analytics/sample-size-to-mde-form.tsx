@@ -15,14 +15,27 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SampleSizeToMdeFormSchema, type SampleSizeToMdeFormValues, type SampleSizeToMdeCalculationResults } from "@/lib/types";
+import { 
+  SampleSizeToMdeFormSchema, 
+  type SampleSizeToMdeFormValues, 
+  type SampleSizeToMdeCalculationResults,
+  type ExcelDataRow 
+} from "@/lib/types";
 import { calculateMdeFromSampleSizeAction } from "@/actions/ab-analytics-actions";
-import { useState } from "react";
-import { Loader2, AlertTriangle, Download } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { useState, useEffect, useRef } from "react";
+import { Loader2, SettingsIcon, Download } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { METRIC_OPTIONS, REAL_ESTATE_OPTIONS, DEFAULT_STATISTICAL_POWER, DEFAULT_SIGNIFICANCE_LEVEL, DEFAULT_SAMPLE_SIZE_PER_VARIANT } from "@/lib/constants";
+import { 
+  METRIC_OPTIONS as DEFAULT_METRIC_OPTIONS, 
+  REAL_ESTATE_OPTIONS as DEFAULT_REAL_ESTATE_OPTIONS, 
+  DEFAULT_STATISTICAL_POWER, 
+  DEFAULT_SIGNIFICANCE_LEVEL, 
+  DEFAULT_SAMPLE_SIZE_PER_VARIANT,
+  METRIC_TYPE_OPTIONS 
+} from "@/lib/constants";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 
 
 interface SampleSizeToMdeFormProps {
@@ -34,20 +47,175 @@ interface SampleSizeToMdeFormProps {
 
 export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: SampleSizeToMdeFormProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [parsedExcelData, setParsedExcelData] = useState<ExcelDataRow[] | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  
+  const [availableMetrics, setAvailableMetrics] = useState<string[]>(DEFAULT_METRIC_OPTIONS);
+  const [availableRealEstates, setAvailableRealEstates] = useState<string[]>(DEFAULT_REAL_ESTATE_OPTIONS);
+  const [isHistoricalFieldReadOnly, setIsHistoricalFieldReadOnly] = useState(false);
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+
   const { toast } = useToast();
 
   const form = useForm<SampleSizeToMdeFormValues>({
     resolver: zodResolver(SampleSizeToMdeFormSchema),
     defaultValues: {
-      metric: METRIC_OPTIONS[0],
+      metric: '',
+      metricType: METRIC_TYPE_OPTIONS[1],
       mean: NaN,
       variance: NaN,
       sampleSizePerVariant: DEFAULT_SAMPLE_SIZE_PER_VARIANT,
-      realEstate: REAL_ESTATE_OPTIONS[0],
+      realEstate: 'platform',
       statisticalPower: DEFAULT_STATISTICAL_POWER,
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
+      targetExperimentDurationDays: 14,
+      totalUsersInSelectedDuration: NaN,
+      numberOfVariants: 2,
     },
   });
+
+  const selectedMetric = form.watch("metric");
+  const selectedRealEstate = form.watch("realEstate");
+  const targetExperimentDuration = form.watch("targetExperimentDurationDays");
+  const selectedMetricType = form.watch("metricType");
+  const currentMean = form.watch("mean");
+  
+  const prevSelectedMetricRef = useRef<string | undefined>();
+  const prevSelectedRealEstateRef = useRef<string | undefined>();
+  const prevTargetExperimentDurationRef = useRef<number | undefined>();
+
+
+  useEffect(() => {
+    const storedData = localStorage.getItem('abalyticsMappedData');
+    const storedFileName = localStorage.getItem('abalyticsFileName');
+    if (storedData && storedFileName) {
+      try {
+        const data: ExcelDataRow[] = JSON.parse(storedData);
+        setParsedExcelData(data);
+        setUploadedFileName(storedFileName);
+        
+        const uniqueMetrics = Array.from(new Set(data.map(row => row.metric).filter(Boolean) as string[]));
+        setAvailableMetrics(uniqueMetrics.length > 0 ? uniqueMetrics : DEFAULT_METRIC_OPTIONS);
+        if (uniqueMetrics.length > 0 && !form.getValues("metric")) {
+            form.setValue("metric", uniqueMetrics[0]);
+        }
+      } catch (e) {
+        console.error("Failed to parse stored data:", e);
+        localStorage.removeItem('abalyticsMappedData');
+        localStorage.removeItem('abalyticsFileName');
+        setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
+        setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS);
+        setIsHistoricalFieldReadOnly(false);
+      }
+    } else {
+        setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
+        setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS);
+        setIsHistoricalFieldReadOnly(false);
+        if (!form.getValues("metric") && DEFAULT_METRIC_OPTIONS.length > 0) form.setValue("metric", DEFAULT_METRIC_OPTIONS[0]);
+        if (!form.getValues("realEstate") && DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !form.getValues("realEstate")) {
+             form.setValue("realEstate", "platform"); 
+        }
+    }
+  }, [form, toast]);
+
+  useEffect(() => {
+    if (parsedExcelData && selectedMetric) {
+      const filteredByMetric = parsedExcelData.filter(row => row.metric === selectedMetric);
+      const uniqueRealEstates = Array.from(new Set(filteredByMetric.map(row => row.realEstate).filter(Boolean) as string[]));
+      setAvailableRealEstates(uniqueRealEstates.length > 0 ? uniqueRealEstates : DEFAULT_REAL_ESTATE_OPTIONS);
+      
+      const currentFormRealEstate = form.getValues("realEstate");
+      if (uniqueRealEstates.length > 0) {
+        if (!uniqueRealEstates.includes(currentFormRealEstate) && currentFormRealEstate !== 'platform') { 
+          form.setValue("realEstate", uniqueRealEstates[0]);
+        } else if (!currentFormRealEstate && !uniqueRealEstates.includes('platform')) { 
+            form.setValue("realEstate", uniqueRealEstates[0]);
+        } else if (!currentFormRealEstate && uniqueRealEstates.includes('platform')) {
+             form.setValue("realEstate", 'platform');
+        }
+      } else if (DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !parsedExcelData?.length) { 
+          form.setValue("realEstate", form.getValues("realEstate") || "platform");
+      }
+    } else if (!parsedExcelData) {
+        setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS);
+         if (DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !form.getValues("realEstate")) {
+            form.setValue("realEstate", "platform");
+        }
+    }
+  }, [parsedExcelData, selectedMetric, form]);
+
+  useEffect(() => {
+    const userActuallyChangedMetric = prevSelectedMetricRef.current !== selectedMetric && prevSelectedMetricRef.current !== undefined;
+    const userActuallyChangedRealEstate = prevSelectedRealEstateRef.current !== selectedRealEstate && prevSelectedRealEstateRef.current !== undefined;
+    const userActuallyChangedTargetDuration = prevTargetExperimentDurationRef.current !== targetExperimentDuration && prevTargetExperimentDurationRef.current !== undefined;
+    
+    const isUserDrivenSelectorChange = userActuallyChangedMetric || userActuallyChangedRealEstate || userActuallyChangedTargetDuration;
+    let valuesActuallyChangedByAutofill = false;
+
+    if (parsedExcelData && selectedMetric && selectedRealEstate && targetExperimentDuration !== undefined && !isNaN(targetExperimentDuration) && targetExperimentDuration > 0) {
+      const matchedRow = parsedExcelData.find(row => 
+        row.metric === selectedMetric &&
+        row.realEstate === selectedRealEstate &&
+        row.lookbackDays == targetExperimentDuration 
+      );
+
+      if (matchedRow) {
+        const meanVal = parseFloat(String(matchedRow.mean));
+        const varianceVal = parseFloat(String(matchedRow.variance));
+        const totalUsersVal = matchedRow.totalUsers ? parseInt(String(matchedRow.totalUsers), 10) : NaN;
+        
+        if (form.getValues("mean") !== meanVal && !(isNaN(form.getValues("mean")) && isNaN(meanVal))) {
+            form.setValue("mean", isNaN(meanVal) ? NaN : meanVal, { shouldValidate: true });
+            valuesActuallyChangedByAutofill = true;
+        }
+        if (form.getValues("variance") !== varianceVal && !(isNaN(form.getValues("variance")) && isNaN(varianceVal))) {
+            form.setValue("variance", isNaN(varianceVal) ? NaN : varianceVal, { shouldValidate: true });
+            valuesActuallyChangedByAutofill = true;
+        }
+        const currentTotalUsersInForm = form.getValues("totalUsersInSelectedDuration");
+        if (totalUsersVal !== currentTotalUsersInForm && !(isNaN(totalUsersVal) && isNaN(currentTotalUsersInForm ?? NaN))) {
+            form.setValue("totalUsersInSelectedDuration", isNaN(totalUsersVal) ? NaN : totalUsersVal, { shouldValidate: true });
+            valuesActuallyChangedByAutofill = true;
+        }
+        setIsHistoricalFieldReadOnly(true);
+        if (isUserDrivenSelectorChange && valuesActuallyChangedByAutofill) {
+            onResults(null); 
+        }
+      } else { 
+        if(isHistoricalFieldReadOnly || isUserDrivenSelectorChange){ 
+            form.setValue("mean", NaN);
+            form.setValue("variance", NaN);
+            form.setValue("totalUsersInSelectedDuration", NaN);
+            setIsHistoricalFieldReadOnly(false);
+        }
+        if (isUserDrivenSelectorChange && parsedExcelData.length > 0) { 
+            onResults(null);
+        }
+      }
+    } else if (!parsedExcelData && isUserDrivenSelectorChange) { 
+        if(isHistoricalFieldReadOnly) { 
+            form.setValue("mean", NaN);
+            form.setValue("variance", NaN);
+            form.setValue("totalUsersInSelectedDuration", NaN);
+            setIsHistoricalFieldReadOnly(false);
+            onResults(null);
+        }
+    }
+    
+    prevSelectedMetricRef.current = selectedMetric;
+    prevSelectedRealEstateRef.current = selectedRealEstate;
+    prevTargetExperimentDurationRef.current = targetExperimentDuration;
+
+  }, [parsedExcelData, selectedMetric, selectedRealEstate, targetExperimentDuration, form, onResults, isHistoricalFieldReadOnly]);
+
+  useEffect(() => {
+    if (selectedMetricType === "Binary" && !isNaN(currentMean) && currentMean >= 0 && currentMean <= 1) {
+      if (!isHistoricalFieldReadOnly) { 
+        const calculatedVariance = currentMean * (1 - currentMean);
+        form.setValue("variance", parseFloat(calculatedVariance.toFixed(6)), { shouldValidate: true });
+      }
+    }
+  }, [selectedMetricType, currentMean, form, isHistoricalFieldReadOnly]); 
 
   async function onSubmit(values: SampleSizeToMdeFormValues) {
     setIsLoading(true);
@@ -76,7 +244,7 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
       }
     } catch (error) {
       console.error(error);
-      onResults(null); // Clear results on error
+      onResults(null); 
       toast({
         variant: "destructive",
         title: "MDE Calculation Failed",
@@ -88,7 +256,7 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
   }
   
   const handleDownloadReport = () => {
-    if (currentResults) { // currentResults already includes 'inputs'
+    if (currentResults) { 
       onDownload(currentResults);
     } else {
        toast({
@@ -99,30 +267,95 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
     }
   };
 
+  const isVarianceReadOnlyForBinary = selectedMetricType === "Binary" && !isNaN(currentMean) && currentMean >= 0 && currentMean <= 1 && !isHistoricalFieldReadOnly;
+
   return (
     <Card className="w-full shadow-lg">
-      <CardHeader>
-        <CardTitle className="font-headline text-2xl">Sample Size to MDE Inputs</CardTitle>
-        <p className="text-muted-foreground text-xs">Enter your available sample size and other parameters to find the achievable MDE.</p>
+      <CardHeader className="flex flex-row items-start justify-between">
+        <div>
+            <CardTitle className="font-headline text-2xl">Sample Size to MDE Inputs</CardTitle>
+            <p className="text-muted-foreground text-xs mt-1">
+            { !uploadedFileName && 'Enter parameters or upload a data file via "Upload & Map Data" for auto-fill.'}
+            </p>
+        </div>
+        <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline" size="icon">
+                    <SettingsIcon className="h-5 w-5" />
+                    <span className="sr-only">Open Statistical Settings</span>
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>Advanced Statistical Settings</DialogTitle>
+                    <p className="text-xs text-muted-foreground">
+                        Adjust statistical power and significance level (alpha).
+                    </p>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <FormField
+                        control={form.control}
+                        name="statisticalPower"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Statistical Power (1 - β)</FormLabel>
+                            <FormControl>
+                            <Input type="number" placeholder="e.g., 0.8 for 80%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
+                            </FormControl>
+                            <FormDescription className="text-xs">Typically 0.8 (80%). Value between 0.01 and 0.99.</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="significanceLevel"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Significance Level (α)</FormLabel>
+                            <FormControl>
+                            <Input type="number" placeholder="e.g., 0.05 for 5%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
+                            </FormControl>
+                            <FormDescription className="text-xs">Typically 0.05 (5%). Value between 0.01 and 0.99.</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button type="button" onClick={() => setIsSettingsDialogOpen(false)}>Done</Button>
+                    </DialogClose>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
       </CardHeader>
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <Separator />
+            <p className="text-sm font-medium text-foreground">Experiment Configuration</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <FormField
                 control={form.control}
                 name="metric"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Metric</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select 
+                        onValueChange={(value) => { field.onChange(value); onResults(null);}} 
+                        value={field.value}
+                        disabled={!availableMetrics.length}
+                    >
                       <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Select a metric" /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder={parsedExcelData ? "Select Metric" : "Select a metric"} /></SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {METRIC_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                        {availableMetrics.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    {!parsedExcelData && <FormDescription className="text-xs">Upload a file for more options.</FormDescription>}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -132,48 +365,150 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
                 name="realEstate"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Real Estate (for context)</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormLabel>Real Estate</FormLabel>
+                    <Select 
+                        onValueChange={(value) => { field.onChange(value); onResults(null); }} 
+                        value={field.value}
+                        disabled={!selectedMetric || !availableRealEstates.length}
+                    >
                       <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Select real estate" /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder={parsedExcelData ? "Select Real Estate" : "Select real estate"} /></SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {REAL_ESTATE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                        {availableRealEstates.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+               <FormField
+                control={form.control}
+                name="metricType"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Metric Type</FormLabel>
+                    <Select onValueChange={(value) => { field.onChange(value); onResults(null); setIsHistoricalFieldReadOnly(false); form.setValue('variance', NaN); }} value={field.value}>
+                    <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                        {METRIC_TYPE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                    </SelectContent>
+                    </Select>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
+            <FormField
+                control={form.control}
+                name="sampleSizePerVariant"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sample Size (per variant)</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="e.g., 50000" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}}/>
+                    </FormControl>
+                    <FormDescription className="text-xs">Enter available sample size per variant.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="targetExperimentDurationDays"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Target Experiment Duration (days)</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="e.g., 14" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} />
+                    </FormControl>
+                    <FormDescription className="text-xs">Drives historical data lookup from file if available.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+               <FormField
+                control={form.control}
+                name="numberOfVariants"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Number of Variants</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} />
+                    </FormControl>
+                    <FormDescription className="text-xs">Total variants including control (min 2).</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-
-            <Separator />
-            <p className="text-sm text-muted-foreground">Enter parameters for MDE calculation:</p>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <FormField control={form.control} name="sampleSizePerVariant" render={({ field }) => (
-                  <FormItem><FormLabel>Sample Size (per variant)</FormLabel><FormControl><Input type="number" placeholder="e.g., 50000" {...field} value={isNaN(field.value) ? '' : field.value} /></FormControl><FormMessage /></FormItem>
-              )}/>
-              <FormField control={form.control} name="mean" render={({ field }) => (
-                  <FormItem><FormLabel>Mean (Historical)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.15" {...field} step="any" value={isNaN(field.value) ? '' : field.value}/></FormControl><FormDescription className="text-xs">Needed for relative MDE.</FormDescription><FormMessage /></FormItem>
-              )}/>
-              <FormField control={form.control} name="variance" render={({ field }) => (
-                  <FormItem><FormLabel>Variance (Historical)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.1275" {...field} step="any" value={isNaN(field.value) ? '' : field.value}/></FormControl><FormMessage /></FormItem>
-              )}/>
-            </div>
-
             <Separator />
-            <p className="text-sm text-muted-foreground">Adjust statistical parameters if needed:</p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField control={form.control} name="statisticalPower" render={({ field }) => (
-                  <FormItem><FormLabel>Statistical Power (1 - β)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.8" {...field} step="0.01" min="0.01" max="0.99" value={isNaN(field.value) ? '' : field.value} /></FormControl><FormDescription className="text-xs">Typically 0.8 (80%).</FormDescription><FormMessage /></FormItem>
-              )}/>
-              <FormField control={form.control} name="significanceLevel" render={({ field }) => (
-                  <FormItem><FormLabel>Significance Level (α)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.05" {...field} step="0.01" min="0.01" max="0.99" value={isNaN(field.value) ? '' : field.value} /></FormControl><FormDescription className="text-xs">Typically 0.05 (5%).</FormDescription><FormMessage /></FormItem>
-              )}/>
+            <p className="text-sm font-medium text-foreground">
+                Historical Data {isHistoricalFieldReadOnly ? `(auto-filled)` : `(manual input)`}
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <FormField
+                control={form.control}
+                name="mean"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mean (Historical)</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder={selectedMetricType === 'Binary' ? "e.g., 0.1 for 10%" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isHistoricalFieldReadOnly) {setIsHistoricalFieldReadOnly(false);}}} step="any" readOnly={isHistoricalFieldReadOnly} />
+                    </FormControl>
+                    {!isHistoricalFieldReadOnly && <FormDescription className="text-xs">{selectedMetricType === 'Binary' ? "Proportion (0-1)." : "Average value."}</FormDescription>}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="variance"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Variance (Historical)</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="e.g., 0.1275" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isHistoricalFieldReadOnly) {setIsHistoricalFieldReadOnly(false);}}} step="any" readOnly={isHistoricalFieldReadOnly || isVarianceReadOnlyForBinary} />
+                    </FormControl>
+                    {!isHistoricalFieldReadOnly && (isVarianceReadOnlyForBinary ? 
+                        <FormDescription className="text-xs text-primary">Auto-calculated (p*(1-p))</FormDescription> :
+                        <FormDescription className="text-xs">Enter metric variance.</FormDescription>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+               <FormField
+                control={form.control}
+                name="totalUsersInSelectedDuration"
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Total Users for Target Duration ({targetExperimentDuration || 'N/A'} days)</FormLabel>
+                        <FormControl>
+                        <Input 
+                            type="number" 
+                            placeholder="e.g., 70000" 
+                            {...field} 
+                            value={isNaN(field.value ?? NaN) ? '' : field.value}
+                            onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isHistoricalFieldReadOnly) {setIsHistoricalFieldReadOnly(false);}}}
+                            readOnly={isHistoricalFieldReadOnly} 
+                        />
+                        </FormControl>
+                        {!isHistoricalFieldReadOnly && 
+                            <FormDescription className="text-xs">Total unique users for the duration (for context).</FormDescription>
+                        }
+                        {isHistoricalFieldReadOnly && 
+                            <FormDescription className="text-xs">For the selected {targetExperimentDuration}-day duration.</FormDescription>
+                        }
+                        <FormMessage />
+                    </FormItem>
+                )}
+                />
             </div>
-            <div className="flex flex-col sm:flex-row gap-4 pt-2">
+            
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Calculate Achievable MDE
@@ -194,7 +529,7 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
 export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSizeToMdeCalculationResults | null }) {
   if (!results) return null;
 
-  const { achievableMde, warnings, confidenceLevel, powerLevel } = results;
+  const { achievableMde, warnings } = results;
 
   const shouldShowCard = achievableMde !== undefined || (warnings && warnings.length > 0);
 
@@ -202,7 +537,6 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
      return null; 
   }
   
-  // If there's no MDE but there are warnings, we only show warnings.
   const onlyShowWarnings = achievableMde === undefined && warnings && warnings.length > 0;
 
 
@@ -214,15 +548,7 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
       <CardContent className="space-y-4">
         {onlyShowWarnings && (
              <div className="mt-4">
-                <h3 className="font-medium text-lg flex items-center text-destructive">
-                <AlertTriangle className="mr-2 h-5 w-5" />
-                Notices
-                </h3>
-                <ul className="list-disc list-inside space-y-1 pl-2 text-destructive bg-destructive/10 p-3 rounded-md">
-                {warnings!.map((warning, index) => (
-                    <li key={index} className="text-sm text-destructive">{warning.replace(/_/g, ' ')}</li>
-                ))}
-                </ul>
+                {/* Warnings section removed as per user request */}
             </div>
         )}
 
@@ -231,7 +557,7 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
         )}
 
         {!onlyShowWarnings && achievableMde !== undefined && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-6 text-sm mb-6">
             <div>
               <p className="font-medium text-muted-foreground">Achievable MDE (Relative)</p>
               <p className="text-2xl font-semibold text-primary">{achievableMde.toFixed(2)}%</p>
@@ -242,4 +568,3 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
     </Card>
   );
 }
-

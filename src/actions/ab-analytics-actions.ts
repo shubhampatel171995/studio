@@ -1,7 +1,7 @@
 
 "use server";
 
-import type { MdeToSampleSizeFormValues, MdeToSampleSizeCalculationResults, SampleSizeToMdeFormValues, SampleSizeToMdeCalculationResults, DirectCalculationOutput } from '@/lib/types';
+import type { MdeToSampleSizeFormValues, SampleSizeToMdeFormValues, SampleSizeToMdeCalculationResults, DirectCalculationOutput, MdeToSampleSizeCalculationResults } from '@/lib/types';
 import { Z_ALPHA_DIV_2, Z_BETA } from '@/lib/constants';
 
 // Action for "MDE to Sample Size" flow
@@ -15,18 +15,16 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
     minimumDetectableEffect, // This is MDE % from form
     statisticalPower, 
     significanceLevel,
-    numberOfVariants, // New field
-    totalUsersInSelectedDuration, // For Excel-driven or manual entry for MDE->SS
+    numberOfVariants, 
+    totalUsersInSelectedDuration, 
     targetExperimentDurationDays,
     lookbackDays, 
-    historicalDailyTraffic, // Only for Manual Calculator flow
   } = formValues;
 
   const localWarnings: string[] = [];
-  let requiredSampleSizePerVariantValue: number | undefined = undefined; // Renamed for clarity
-  const mdeDecimal = minimumDetectableEffect / 100; // Convert MDE % to decimal
+  let requiredSampleSizePerVariantValue: number | undefined = undefined; 
+  const mdeDecimal = minimumDetectableEffect / 100; 
 
-  // Input validations
   if (metricType === "Binary") {
     if (mean < 0 || mean > 1) {
       localWarnings.push('Warning: For Binary metric, Mean (proportion) should be between 0 and 1.');
@@ -36,19 +34,19 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
       localWarnings.push(`Warning: Provided variance (${variance.toFixed(6)}) for Binary metric differs from calculated (p*(1-p) = ${calculatedVarianceBinary.toFixed(6)}). Using provided variance for calculation.`);
     }
   } else if (metricType === "Continuous") {
-    if (mean <= 0) {
+    if (mean <= 0 && !isNaN(mean)) {
       localWarnings.push('Warning: For Continuous metric, Mean should be positive for MDE calculation.');
     }
   }
 
-  if (mean > 0) {
-    if (variance > mean * 2) { // Heuristic for high variance
+  if (!isNaN(mean) && mean > 0) {
+    if (variance > mean * 2) { 
       localWarnings.push('Warning: The provided variance is relatively high compared to the mean. This will increase the required sample size per variant.');
     }
-    if (variance < mean * 0.01 && mean > 1e-6) { // Heuristic for low variance
+    if (variance < mean * 0.01 && mean > 1e-6) { 
       localWarnings.push('Warning: The provided variance is very low compared to the mean.');
     }
-  } else if (metricType === "Continuous" && variance > 1000 && mean <= 0) {
+  } else if (metricType === "Continuous" && variance > 1000 && (isNaN(mean) || mean <= 0)) {
      localWarnings.push('Warning: The provided variance is high, and mean is zero or negative for a continuous metric. Ensure inputs are correct.');
   }
   
@@ -63,7 +61,6 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
   }
 
 
-  // Perform calculation if no critical errors
   if (!localWarnings.some(w => w.startsWith("Error:"))) {
     const zAlphaDiv2Value = Z_ALPHA_DIV_2[significanceLevel.toFixed(2)] || Z_ALPHA_DIV_2["0.05"];
     const zBetaValue = Z_BETA[statisticalPower.toFixed(2)] || Z_BETA["0.80"];
@@ -73,15 +70,16 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
 
     const mdeAbsolute = mean * mdeDecimal;
 
-    if (mdeAbsolute === 0 && mean > 0) { 
-        localWarnings.push('Warning: MDE is 0%, resulting in an infinite sample size per variant. Please use a non-zero MDE.');
+    if (mdeAbsolute === 0 && mean > 0 && mdeDecimal !== 0) { 
+        localWarnings.push('Warning: MDE is 0% (or mean is 0), resulting in an infinite sample size per variant. Please use a non-zero MDE and positive mean for continuous metrics.');
+    } else if (mdeDecimal === 0) {
+        localWarnings.push('Warning: MDE is 0%. Please use a non-zero MDE.');
     } else if (mean <= 0 && metricType === "Continuous") {
          localWarnings.push('Warning: Mean is zero or negative for a continuous metric, cannot calculate absolute MDE based on relative MDE. Sample size per variant cannot be determined.');
     } else if (variance < 0) {
         localWarnings.push('Warning: Variance is negative. Sample size per variant cannot be determined.');
     }
      else {
-        // Formula for sample size per variant (N_per_group)
         const N = (2 * Math.pow(zAlphaDiv2Value + zBetaValue, 2) * variance) / Math.pow(mdeAbsolute, 2);
         if (!isNaN(N) && N > 0) {
             requiredSampleSizePerVariantValue = Math.ceil(N);
@@ -93,20 +91,12 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
 
   let exposureNeededPercentage: number | undefined = undefined;
   if (requiredSampleSizePerVariantValue !== undefined && requiredSampleSizePerVariantValue > 0 && numberOfVariants >= 2) {
-    const totalRequiredSampleSizeForExposure = requiredSampleSizePerVariantValue * numberOfVariants;
+    const totalRequiredSampleSizeForExperiment = requiredSampleSizePerVariantValue * numberOfVariants;
     
-    let effectiveTotalUsersForDuration: number | undefined = undefined;
-    if (totalUsersInSelectedDuration !== undefined && !isNaN(totalUsersInSelectedDuration) && totalUsersInSelectedDuration > 0) {
-        effectiveTotalUsersForDuration = totalUsersInSelectedDuration;
-    } else if (historicalDailyTraffic !== undefined && !isNaN(historicalDailyTraffic) && historicalDailyTraffic > 0 && targetExperimentDurationDays > 0) {
-        effectiveTotalUsersForDuration = historicalDailyTraffic * targetExperimentDurationDays;
-    }
-
-
-    if (effectiveTotalUsersForDuration === undefined || effectiveTotalUsersForDuration <= 0) {
+    if (totalUsersInSelectedDuration === undefined || isNaN(totalUsersInSelectedDuration) || totalUsersInSelectedDuration <= 0) {
       localWarnings.push("Total users for target duration is invalid, zero, or cannot be determined. Cannot calculate exposure percentage.");
     } else {
-      exposureNeededPercentage = (totalRequiredSampleSizeForExposure / effectiveTotalUsersForDuration) * 100;
+      exposureNeededPercentage = (totalRequiredSampleSizeForExperiment / totalUsersInSelectedDuration) * 100;
     }
   } else if (!localWarnings.some(w => w.startsWith("Error:"))) {
      localWarnings.push("Required sample size per variant could not be determined. Exposure estimates cannot be calculated.");
@@ -127,11 +117,10 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
     variance,
     lookbackDays: lookbackDays || targetExperimentDurationDays,
     realEstate,
-    minimumDetectableEffect: mdeDecimal, // MDE as decimal
+    minimumDetectableEffect: mdeDecimal, 
     significanceLevel,
-    numberOfVariants, // Pass through for results
-    totalUsersInSelectedDuration: totalUsersInSelectedDuration, // For Excel-driven or primary MDE->SS
-    historicalDailyTraffic: historicalDailyTraffic, // For Manual Calc
+    numberOfVariants, 
+    totalUsersInSelectedDuration: totalUsersInSelectedDuration, 
     targetExperimentDurationDays,
     exposureNeededPercentage,
   };
@@ -140,11 +129,13 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
 // Action for "Sample Size to MDE" flow
 export async function calculateMdeFromSampleSizeAction(formValues: SampleSizeToMdeFormValues): Promise<Omit<SampleSizeToMdeCalculationResults, 'inputs'>> {
   const {
+    metricType, // New
     mean,
     variance,
     sampleSizePerVariant,
     statisticalPower,
     significanceLevel,
+    // numberOfVariants // For UI consistency, not directly in MDE formula from N_per_group
   } = formValues;
 
   const warnings: string[] = [];
@@ -152,46 +143,66 @@ export async function calculateMdeFromSampleSizeAction(formValues: SampleSizeToM
   if (sampleSizePerVariant <= 0 || isNaN(sampleSizePerVariant)) {
     warnings.push("Sample size per variant must be a positive number.");
   }
-  if (mean <= 0 || isNaN(mean)) {
-    warnings.push("Mean must be a positive number to calculate relative MDE.");
-  }
   if (variance < 0 || isNaN(variance)) { 
     warnings.push("Variance must be a non-negative number.");
   }
-   if (isNaN(statisticalPower) || statisticalPower <=0 || statisticalPower >=1 ) {
+  if (isNaN(statisticalPower) || statisticalPower <=0 || statisticalPower >=1 ) {
     warnings.push("Statistical power must be between 0 and 1 (exclusive).");
   }
   if (isNaN(significanceLevel) || significanceLevel <=0 || significanceLevel >=1) {
     warnings.push("Significance level must be between 0 and 1 (exclusive).");
   }
-
-
-  if (warnings.length > 0) {
-    return { warnings, achievableMde: undefined, confidenceLevel: 1 - significanceLevel, powerLevel: statisticalPower };
+  
+  if (metricType === "Binary") {
+    if (mean < 0 || mean > 1) {
+      warnings.push('Warning: For Binary metric, Mean (proportion) should be between 0 and 1.');
+    }
+    const calculatedVarianceBinary = mean * (1 - mean);
+    if (Math.abs(variance - calculatedVarianceBinary) > 1e-9 && !isNaN(calculatedVarianceBinary) && !isNaN(variance)) {
+      warnings.push(`Warning: Provided variance (${variance.toFixed(6)}) for Binary metric differs from calculated (p*(1-p) = ${calculatedVarianceBinary.toFixed(6)}). Using provided variance for calculation.`);
+    }
+  } else if (metricType === "Continuous") {
+    if (mean <= 0 && !isNaN(mean)) {
+      warnings.push('Warning: For Continuous metric, Mean should be positive for relative MDE calculation.');
+    }
   }
+   if (isNaN(mean)) {
+      warnings.push("Mean must be a valid number.");
+  }
+
+
+  if (warnings.some(w => w.startsWith("Error:") || (w.startsWith("Warning:") && (w.includes("Mean should be positive") || w.includes("Mean (proportion) should be between 0 and 1")) ))) {
+    // Critical warnings prevent calculation
+     return { warnings, achievableMde: undefined, confidenceLevel: 1 - significanceLevel, powerLevel: statisticalPower };
+  }
+
 
   const zAlphaDiv2Value = Z_ALPHA_DIV_2[significanceLevel.toFixed(2)] || Z_ALPHA_DIV_2["0.05"];
   const zBetaValue = Z_BETA[statisticalPower.toFixed(2)] || Z_BETA["0.80"];
 
-  // MDE_abs = (Z_alpha/2 + Z_beta) * sqrt(2 * variance / N_per_group)
+  if (!zAlphaDiv2Value) warnings.push(`Warning: Z-score for significance level ${significanceLevel.toFixed(2)} not found, using default for 0.05.`);
+  if (!zBetaValue) warnings.push(`Warning: Z-score for statistical power ${statisticalPower.toFixed(2)} not found, using default for 0.80.`);
+
+
   const mdeAbsolute = (zAlphaDiv2Value + zBetaValue) * Math.sqrt((2 * variance) / sampleSizePerVariant);
   
-  // MDE_rel = MDE_abs / mean
   let mdeRelative = NaN;
   if (mean > 0) { 
     mdeRelative = (mdeAbsolute / mean) * 100; // As percentage
   } else {
-    warnings.push("Mean is zero or negative, cannot calculate relative MDE. Absolute MDE calculated.");
+    warnings.push("Mean is zero or negative, cannot calculate relative MDE. Absolute MDE calculated: " + mdeAbsolute.toFixed(4));
   }
   
   if (isNaN(mdeRelative) || !isFinite(mdeRelative)) {
-      warnings.push(`Could not calculate a valid MDE. Check inputs (variance, mean > 0, sample size per variant > 0).`);
-      return { warnings, achievableMde: undefined, confidenceLevel: 1 - significanceLevel, powerLevel: statisticalPower };
+      if (!warnings.some(w => w.includes("Mean is zero or negative"))) { // Avoid redundant message
+        warnings.push(`Could not calculate a valid relative MDE. Check inputs (variance, mean > 0, sample size per variant > 0).`);
+      }
+      return { warnings: Array.from(new Set(warnings)), achievableMde: undefined, confidenceLevel: 1 - significanceLevel, powerLevel: statisticalPower };
   }
 
   return { 
     achievableMde: parseFloat(mdeRelative.toFixed(2)), 
-    warnings: warnings.length > 0 ? warnings : undefined,
+    warnings: warnings.length > 0 ? Array.from(new Set(warnings)) : undefined,
     confidenceLevel: 1 - significanceLevel,
     powerLevel: statisticalPower,
   };
