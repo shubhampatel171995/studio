@@ -117,18 +117,20 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
           form.setValue("lookbackDays", uniqueLookbacks[0], { shouldValidate: true });
         }
       } else {
-        form.setValue("lookbackDays", DEFAULT_LOOKBACK_DAYS);
+        form.setValue("lookbackDays", DEFAULT_LOOKBACK_DAYS); // Reset to default if no lookbacks available for current selection
         form.setValue("mean", NaN);
         form.setValue("variance", NaN);
         form.setValue("numberOfUsers", NaN);
         setIsDataFromExcel(false);
-        onResults(null);
-        toast({ title: "No lookback periods found", description: `No lookback data in the file for ${selectedMetric} on ${selectedRealEstate}. Input manually or check selections/file.`, variant: "default"});
+        onResults(null); // Clear previous results
+        if (parsedExcelData.length > 0) { // Only toast if there was excel data but no match
+          toast({ title: "No lookback periods found", description: `No lookback data in the file for ${selectedMetric} on ${selectedRealEstate}. Input manually or check selections/file.`, variant: "default"});
+        }
       }
     } else {
       setAvailableLookbackDays([]);
       if (selectedInputType !== "excelData") {
-        setIsDataFromExcel(false);
+        setIsDataFromExcel(false); // Ensure this is false if not using Excel data
       }
     }
   }, [selectedInputType, selectedMetric, selectedRealEstate, parsedExcelData, form, toast, onResults]);
@@ -142,7 +144,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       const lookbackKeyExcel = 'lookbackDays';
       const meanKey = 'mean';
       const varianceKey = 'variance';
-      const usersKey = 'totalUsers';
+      const usersKey = 'totalUsers'; // Make sure this matches your ExcelDataRow and mapping
 
       const matchedRow = parsedExcelData.find(row => {
         const rowMetric = row[metricKey];
@@ -163,20 +165,28 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
         form.setValue("variance", isNaN(varianceVal) ? NaN : varianceVal, { shouldValidate: true });
         form.setValue("numberOfUsers", isNaN(usersVal) ? NaN : usersVal, { shouldValidate: true });
         setIsDataFromExcel(true);
-        onResults(null);
+        onResults(null); // Clear previous results when auto-filling
         toast({ title: "Data auto-filled from file", description: `Values for ${selectedMetric} on ${selectedRealEstate} for ${currentLookbackDays} days lookback applied.`, variant: "default" });
       } else {
         form.setValue("mean", NaN);
         form.setValue("variance", NaN);
         form.setValue("numberOfUsers", NaN);
         setIsDataFromExcel(false);
-        onResults(null);
-        toast({ title: "No matching data in file", description: `No row found for ${selectedMetric} on ${selectedRealEstate} with ${currentLookbackDays} days lookback. Input manually or check selections.`, variant: "default" });
+        onResults(null); // Clear previous results
+        if (availableLookbackDays.includes(currentLookbackDays)) { // Only toast if a lookback was selected but no data for it
+            toast({ title: "No matching data in file", description: `No row found for ${selectedMetric} on ${selectedRealEstate} with ${currentLookbackDays} days lookback. Input manually or check selections.`, variant: "default" });
+        }
       }
     } else if (selectedInputType !== "excelData") {
+        // If not using excel data, ensure isDataFromExcel is false and fields are clear if they were previously from excel
+        if(isDataFromExcel) { // only clear if it *was* from excel
+            form.setValue("mean", NaN);
+            form.setValue("variance", NaN);
+            form.setValue("numberOfUsers", NaN);
+        }
         setIsDataFromExcel(false);
     }
-  }, [selectedInputType, selectedMetric, selectedRealEstate, currentLookbackDays, parsedExcelData, form, toast, onResults]);
+  }, [selectedInputType, selectedMetric, selectedRealEstate, currentLookbackDays, parsedExcelData, form, toast, onResults, availableLookbackDays, isDataFromExcel]);
 
 
   async function onSubmit(values: MdeToSampleSizeFormValues) {
@@ -186,16 +196,23 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       const result = await calculateSampleSizeAction(values);
       onResults(result);
 
-      if (result.requiredSampleSize !== undefined || (result.warnings && result.warnings.length > 0) ) {
+      if (result.requiredSampleSize !== undefined && result.requiredSampleSize > 0) {
         toast({
-            title: "Calculation Successful",
+            title: "Calculation Complete",
             description: "Required sample size and duration estimates calculated.",
         });
-      } else {
+      } else if (result.warnings && result.warnings.length > 0) {
+        toast({
+            title: "Calculation Notice",
+            description: result.warnings.join(' ') || "Could not fully determine sample size. See notices for details.",
+            variant: "default",
+        });
+      }
+       else {
          toast({
             variant: "destructive",
-            title: "Calculation Incomplete",
-            description: "Could not determine sample size. Please check inputs.",
+            title: "Calculation Failed",
+            description: "Could not determine sample size. Please check inputs and try again.",
         });
       }
 
@@ -277,10 +294,10 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                          <Select
                             onValueChange={(value) => {
                                 field.onChange(parseInt(value, 10));
-                                onResults(null);
-                                setIsDataFromExcel(false); 
+                                onResults(null); // Clear results when lookback changes
+                                // isDataFromExcel will be set by the auto-fill effect
                             }}
-                            value={String(field.value)}
+                            value={String(field.value)} // Ensure value is string for Select
                             disabled={!parsedExcelData || availableLookbackDays.length === 0}
                          >
                             <FormControl>
@@ -302,7 +319,13 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                           type="number" 
                           placeholder="e.g., 30" 
                           {...field} 
-                          onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if (selectedInputType === 'excelData') setIsDataFromExcel(false);}} 
+                          value={isNaN(field.value) ? '' : field.value} // Handle NaN for input display
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            field.onChange(isNaN(val) ? NaN : val); 
+                            onResults(null); 
+                            if (selectedInputType === 'excelData') setIsDataFromExcel(false);
+                          }} 
                           readOnly={isHistoricalDataReadOnly && availableLookbackDays.length > 0} 
                         />
                       </FormControl>
@@ -329,17 +352,14 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                       onValueChange={(value) => { 
                         field.onChange(value); 
                         onResults(null); 
-                        setIsDataFromExcel(false);
+                        setIsDataFromExcel(false); // Reset excel flag when changing input type
                         if (value !== 'excelData') { 
-                            // setParsedExcelData(null); // Keep parsed data if user switches back
-                            // setUploadedFileName(null); 
-                            // setAvailableLookbackDays([]);
                             form.setValue("mean", NaN);
                             form.setValue("variance", NaN);
                             form.setValue("numberOfUsers", NaN);
-                            form.setValue("lookbackDays", DEFAULT_LOOKBACK_DAYS);
+                            form.setValue("lookbackDays", DEFAULT_LOOKBACK_DAYS); // Reset lookback to default for manual
+                            setAvailableLookbackDays([]); // Clear available lookbacks
                         } else {
-                            // If switching to excelData, trigger reload of data from localStorage if available
                              const storedData = localStorage.getItem('abalyticsMappedData');
                              const storedFileName = localStorage.getItem('abalyticsFileName');
                              if (storedData && storedFileName) {
@@ -347,8 +367,9 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                                     const data: ExcelDataRow[] = JSON.parse(storedData);
                                     setParsedExcelData(data);
                                     setUploadedFileName(storedFileName);
+                                    // Trigger effects to populate lookbacks and data
                                      toast({ title: "Using data from file", description: `${storedFileName}. Select Metric, Real Estate, and Lookback.`, variant: "default" });
-                                } catch (e) { /* already handled in mount effect */ }
+                                } catch (e) { console.error("Failed to parse stored data on switch:", e);/* already handled in mount effect */ }
                              } else {
                                 toast({ title: "No file uploaded", description: `Please go to "Upload & Map Data" page first.`, variant: "default" });
                              }
@@ -389,7 +410,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             <Separator />
             <p className="text-sm text-muted-foreground">
               {selectedInputType === 'excelData' ? 
-                (isDataFromExcel ? 'Historical data below is auto-filled from your file and is read-only.' : 'Select Metric, Real Estate, and Lookback Period to auto-fill, or input manually if no match/file.') :
+                (isDataFromExcel ? 'Historical data below is auto-filled from your file and is read-only.' : (uploadedFileName ? 'Select Metric, Real Estate, and Lookback Period to auto-fill, or input manually if no match/file.' : 'Upload a file or input manually.')) :
                 'Enter historical data and desired MDE below.'
               }
             </p>
@@ -416,7 +437,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Mean (Historical)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 0.15" {...field} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="any" readOnly={isHistoricalDataReadOnly} />
+                      <Input type="number" placeholder="e.g., 0.15" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="any" readOnly={isHistoricalDataReadOnly} />
                     </FormControl>
                     {isHistoricalDataReadOnly && <FormDescription className="text-xs text-primary">Value from file</FormDescription>}
                     <FormMessage />
@@ -430,7 +451,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Variance (Historical)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 0.1275" {...field} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="any" readOnly={isHistoricalDataReadOnly} />
+                      <Input type="number" placeholder="e.g., 0.1275" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="any" readOnly={isHistoricalDataReadOnly} />
                     </FormControl>
                     {isHistoricalDataReadOnly && <FormDescription className="text-xs text-primary">Value from file</FormDescription>}
                     <FormMessage />
@@ -444,7 +465,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Total Users (in Lookback)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 100000" {...field} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} readOnly={isHistoricalDataReadOnly} />
+                      <Input type="number" placeholder="e.g., 100000" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} readOnly={isHistoricalDataReadOnly} />
                     </FormControl>
                      {isHistoricalDataReadOnly && <FormDescription className="text-xs text-primary">Value from file</FormDescription>}
                     <FormMessage />
@@ -465,7 +486,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Statistical Power (1 - β)</FormLabel>
                     <FormControl>
-                       <Input type="number" placeholder="e.g., 0.8 for 80%" {...field} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
+                       <Input type="number" placeholder="e.g., 0.8 for 80%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
                     </FormControl>
                      <FormDescription>Typically 0.8 (80%). Value between 0.01 and 0.99.</FormDescription>
                     <FormMessage />
@@ -479,7 +500,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Significance Level (α)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 0.05 for 5%" {...field} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
+                      <Input type="number" placeholder="e.g., 0.05 for 5%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
                     </FormControl>
                     <FormDescription>Typically 0.05 (5%). Value between 0.01 and 0.99.</FormDescription>
                     <FormMessage />
@@ -511,7 +532,7 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
     return null;
   }
 
-  const dailyUsers = results.numberOfUsers && results.lookbackDays && results.lookbackDays > 0 
+  const dailyUsers = results.numberOfUsers && results.lookbackDays && results.lookbackDays > 0 && !isNaN(results.numberOfUsers) && !isNaN(results.lookbackDays)
                      ? results.numberOfUsers / results.lookbackDays 
                      : 0;
   
@@ -530,7 +551,7 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
         {results.requiredSampleSize === undefined && (!results.warnings || results.warnings.length === 0) && (
             <p className="text-muted-foreground text-center py-8">Please run the calculation with valid inputs.</p>
         )}
-        {results.requiredSampleSize !== undefined && (
+        {results.requiredSampleSize !== undefined && results.requiredSampleSize > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div>
                 <p className="font-medium text-muted-foreground">Required Sample Size (per variant)</p>
@@ -547,7 +568,7 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
             </div>
         )}
         
-        {dailyUsers > 0 && results.durationEstimates && results.durationEstimates.length > 0 && results.requiredSampleSize !== undefined && (
+        {dailyUsers > 0 && results.durationEstimates && results.durationEstimates.length > 0 && results.requiredSampleSize !== undefined && results.requiredSampleSize > 0 && (
           <div className="mt-4">
             <h3 className="font-medium text-lg mb-2">Duration vs. Traffic Availability</h3>
             <p className="text-sm text-muted-foreground mb-3">
@@ -581,7 +602,7 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
 
 
         {results.warnings && results.warnings.length > 0 && (
-          <div className={`mt-4 ${results.requiredSampleSize === undefined ? '' : 'pt-4 border-t'}`}>
+          <div className={`mt-4 ${results.requiredSampleSize === undefined || results.requiredSampleSize <=0 ? '' : 'pt-4 border-t'}`}>
             <h3 className="font-medium text-lg flex items-center text-destructive">
               <AlertTriangle className="mr-2 h-5 w-5" />
               Notices from Calculation
