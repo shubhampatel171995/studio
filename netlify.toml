@@ -1,0 +1,15 @@
+
+# This file configures how Netlify builds and deploys your Next.js site.
+# It ensures the Netlify Next.js runtime is used for optimal compatibility.
+
+[build]
+  # Your build command (should match your package.json script)
+  command = "npm run build"
+  
+  # The directory Next.js outputs the build to
+  publish = ".next"
+
+# This section ensures the Next.js runtime plugin is active.
+# Netlify often auto-detects and applies this, but explicitly stating it can be helpful.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
