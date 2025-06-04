@@ -110,7 +110,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
         setIsDataFromExcel(false);
         setIsHistoricalFieldReadOnly(false);
         if (!form.getValues("metric") && DEFAULT_METRIC_OPTIONS.length > 0) form.setValue("metric", DEFAULT_METRIC_OPTIONS[0]);
-        if (!form.getValues("realEstate") && DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !form.getValues("realEstate")) {
+        if (DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !form.getValues("realEstate")) {
              form.setValue("realEstate", "platform"); 
         }
     }
@@ -289,55 +289,55 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                    <DialogTitle>Advanced Statistical Settings</DialogTitle>
-                    <p className="text-xs text-muted-foreground">
-                        Adjust statistical power and significance level (alpha).
-                    </p>
-                </DialogHeader>
-                <FormProvider {...form}> {/* Context for Dialog form fields */}
-                  <div className="grid gap-4 py-4">
-                      <FormField
-                          control={form.control}
-                          name="statisticalPower"
-                          render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>Statistical Power (1 - β)</FormLabel>
-                              <FormControl>
-                              <Input type="number" placeholder="e.g., 0.8 for 80%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
-                              </FormControl>
-                              <FormDescription className="text-xs">Typically 0.8 (80%). Value between 0.01 and 0.99.</FormDescription>
-                              <FormMessage />
-                          </FormItem>
-                          )}
-                      />
-                      <FormField
-                          control={form.control}
-                          name="significanceLevel"
-                          render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>Significance Level (α)</FormLabel>
-                              <FormControl>
-                              <Input type="number" placeholder="e.g., 0.05 for 5%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
-                              </FormControl>
-                              <FormDescription className="text-xs">Typically 0.05 (5%). Value between 0.01 and 0.99.</FormDescription>
-                              <FormMessage />
-                          </FormItem>
-                          )}
-                      />
-                  </div>
-                </FormProvider>
-                <DialogFooter>
-                    <DialogClose asChild>
-                        <Button type="button" onClick={() => setIsSettingsDialogOpen(false)}>Done</Button>
-                    </DialogClose>
-                </DialogFooter>
+                 <FormProvider {...form}>
+                    <DialogHeader>
+                        <DialogTitle>Advanced Statistical Settings</DialogTitle>
+                        <p className="text-xs text-muted-foreground">
+                            Adjust statistical power and significance level (alpha).
+                        </p>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <FormField
+                            control={form.control}
+                            name="statisticalPower"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Statistical Power (1 - β)</FormLabel>
+                                <FormControl>
+                                <Input type="number" placeholder="e.g., 0.8 for 80%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
+                                </FormControl>
+                                <FormDescription className="text-xs">Typically 0.8 (80%). Value between 0.01 and 0.99.</FormDescription>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="significanceLevel"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Significance Level (α)</FormLabel>
+                                <FormControl>
+                                <Input type="number" placeholder="e.g., 0.05 for 5%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
+                                </FormControl>
+                                <FormDescription className="text-xs">Typically 0.05 (5%). Value between 0.01 and 0.99.</FormDescription>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button type="button" onClick={() => setIsSettingsDialogOpen(false)}>Done</Button>
+                        </DialogClose>
+                    </DialogFooter>
+                 </FormProvider>
             </DialogContent>
         </Dialog>
       </CardHeader>
       <CardContent>
-        <Form {...form}> {/* Outer FormProvider */}
-          <FormProvider {...form}> {/* Inner FormProvider to reinforce context */}
+        <Form {...form}>
+          <FormProvider {...form}> 
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               
               <Separator />
@@ -452,13 +452,9 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
               
               <Separator />
               <p className="text-sm font-medium text-foreground">
-                  Historical Data {isHistoricalFieldReadOnly ? `(auto-filled)` : `(manual input)`}
+                  Historical Data {isHistoricalFieldReadOnly ? `(auto-filled for ${targetExperimentDuration || form.getValues("lookbackDays")} days lookback)` : `(manual input)`}
               </p>
-              {isHistoricalFieldReadOnly && (
-                <div className="text-xs p-2 rounded-md bg-accent/10 text-accent">
-                  Using data from your file for {targetExperimentDuration || form.getValues("lookbackDays")} days lookback. Mean, Variance, and Total Users for Duration also auto-filled.
-                </div>
-              )}
+              
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <FormField
                   control={form.control}
@@ -511,9 +507,6 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                           </FormControl>
                           {!isHistoricalFieldReadOnly && 
                               <FormDescription className="text-xs">Enter total unique users for your target experiment duration.</FormDescription>
-                          }
-                          {isHistoricalFieldReadOnly && 
-                              <FormDescription className="text-xs">For the selected {targetExperimentDuration}-day duration.</FormDescription>
                           }
                           <FormMessage />
                       </FormItem>
@@ -582,7 +575,7 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
                     <p className="font-medium text-muted-foreground">Required Sample Size (per variant)</p>
                     <p className="text-2xl font-semibold text-primary">{results.requiredSampleSizePerVariant?.toLocaleString() || 'N/A'}</p>
                 </div>
-                {results.numberOfVariants && totalRequiredSampleSize !== undefined && (
+                {totalRequiredSampleSize !== undefined && (
                     <div>
                         <p className="font-medium text-muted-foreground">Total Required Sample Size</p>
                         <p className="text-2xl font-semibold text-primary">{totalRequiredSampleSize.toLocaleString()}</p>
