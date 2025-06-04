@@ -198,9 +198,12 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
 
   const shouldShowCard = achievableMde !== undefined || (warnings && warnings.length > 0);
 
-  if (!shouldShowCard) {
+  if (!shouldShowCard && (!warnings || warnings.length === 0)) {
      return null; 
   }
+  
+  // If there's no MDE but there are warnings, we only show warnings.
+  const onlyShowWarnings = achievableMde === undefined && warnings && warnings.length > 0;
 
 
   return (
@@ -209,50 +212,33 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
         <CardTitle className="font-headline text-2xl">Sample Size to MDE Results</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {achievableMde === undefined && warnings && warnings.length === 0 && (
+        {onlyShowWarnings && (
+             <div className="mt-4">
+                <h3 className="font-medium text-lg flex items-center text-destructive">
+                <AlertTriangle className="mr-2 h-5 w-5" />
+                Notices
+                </h3>
+                <ul className="list-disc list-inside space-y-1 pl-2 text-destructive bg-destructive/10 p-3 rounded-md">
+                {warnings!.map((warning, index) => (
+                    <li key={index} className="text-sm text-destructive">{warning.replace(/_/g, ' ')}</li>
+                ))}
+                </ul>
+            </div>
+        )}
+
+        {!onlyShowWarnings && achievableMde === undefined && (!warnings || warnings.length === 0) && (
              <p className="text-muted-foreground text-center py-8">Please run the calculation.</p>
         )}
 
-        {achievableMde !== undefined && (
+        {!onlyShowWarnings && achievableMde !== undefined && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div>
               <p className="font-medium text-muted-foreground">Achievable MDE (Relative)</p>
               <p className="text-2xl font-semibold text-primary">{achievableMde.toFixed(2)}%</p>
             </div>
-            {confidenceLevel !== undefined && (
-              <div>
-                <p className="font-medium text-muted-foreground">Confidence Level</p>
-                <p className="text-lg text-accent">{(confidenceLevel * 100).toFixed(0)}%</p>
-              </div>
-            )}
-            {powerLevel !== undefined && (
-             <div>
-                <p className="font-medium text-muted-foreground">Power Level</p>
-                <p className="text-lg text-accent">{(powerLevel * 100).toFixed(0)}%</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {warnings && warnings.length > 0 && (
-          <div className={`mt-4 ${achievableMde === undefined ? '' : 'pt-4 border-t'}`}>
-            <h3 className="font-medium text-lg flex items-center text-destructive">
-              <AlertTriangle className="mr-2 h-5 w-5" />
-              Notices
-            </h3>
-            <ul className="list-disc list-inside space-y-1 pl-2 text-destructive bg-destructive/10 p-3 rounded-md">
-              {warnings.map((warning, index) => (
-                <li key={index} className="text-sm">{warning.replace(/_/g, ' ')}</li>
-              ))}
-            </ul>
           </div>
         )}
       </CardContent>
-      <CardFooter>
-        <p className="text-xs text-muted-foreground">
-          MDE values are estimates. This MDE is the smallest relative change you can reliably detect with the given parameters.
-        </p>
-      </CardFooter>
     </Card>
   );
 }
