@@ -15,7 +15,7 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
     minimumDetectableEffect, // This is MDE % from form
     statisticalPower, 
     significanceLevel,
-    historicalDailyTraffic, 
+    totalUsersInSelectedDuration, // New field for total users in the chosen duration
     targetExperimentDurationDays,
     lookbackDays, 
   } = formValues;
@@ -71,7 +71,7 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
 
     const mdeAbsolute = mean * mdeDecimal;
 
-    if (mdeAbsolute === 0 && mean > 0) { // Avoid division by zero if MDE is 0% but mean is positive
+    if (mdeAbsolute === 0 && mean > 0) { 
         localWarnings.push('Warning: MDE is 0%, resulting in an infinite sample size. Please use a non-zero MDE.');
     } else if (mean <= 0 && metricType === "Continuous") {
          localWarnings.push('Warning: Mean is zero or negative for a continuous metric, cannot calculate absolute MDE based on relative MDE. Sample size cannot be determined.');
@@ -88,26 +88,20 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
     }
   }
 
-
   let exposureNeededPercentage: number | undefined = undefined;
   if (requiredSampleSizePerVariant !== undefined && requiredSampleSizePerVariant > 0) {
-    if (historicalDailyTraffic === undefined || isNaN(historicalDailyTraffic) || historicalDailyTraffic <= 0) {
-      localWarnings.push("Historical daily traffic is invalid or missing. Cannot calculate exposure percentage.");
-    } else if (targetExperimentDurationDays === undefined || isNaN(targetExperimentDurationDays) || targetExperimentDurationDays <=0) {
-      localWarnings.push("Target experiment duration is invalid or missing. Cannot calculate exposure percentage.");
-    }
-    else {
-      const totalRequiredSampleSizeForExposure = requiredSampleSizePerVariant * 2; // Assuming 2 variants
-      const totalAvailableTrafficInTargetDuration = historicalDailyTraffic * targetExperimentDurationDays;
-
-      if (totalAvailableTrafficInTargetDuration > 0) {
-        exposureNeededPercentage = (totalRequiredSampleSizeForExposure / totalAvailableTrafficInTargetDuration) * 100;
+    if (totalUsersInSelectedDuration === undefined || isNaN(totalUsersInSelectedDuration) || totalUsersInSelectedDuration <= 0) {
+      localWarnings.push("Total users for target duration is invalid or missing. Cannot calculate exposure percentage.");
+    } else {
+      const totalRequiredSampleSizeForExposure = requiredSampleSizePerVariant * 2; 
+      if (totalUsersInSelectedDuration > 0) {
+        exposureNeededPercentage = (totalRequiredSampleSizeForExposure / totalUsersInSelectedDuration) * 100;
       } else {
-        localWarnings.push("Total available traffic for target duration is zero. Cannot calculate exposure percentage.");
+        localWarnings.push("Total users for target duration is zero. Cannot calculate exposure percentage.");
       }
     }
   } else if (!localWarnings.some(w => w.startsWith("Error:"))) {
-     localWarnings.push("Required sample size could not be determined. Exposure and duration estimates cannot be calculated.");
+     localWarnings.push("Required sample size could not be determined. Exposure estimates cannot be calculated.");
   }
   
   const directCalcOutput: DirectCalculationOutput = {
@@ -117,6 +111,13 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
     warnings: localWarnings.length > 0 ? Array.from(new Set(localWarnings)) : undefined,
   };
   
+  // Handle manual calculator path which uses historicalDailyTraffic
+  let resultHistoricalDailyTraffic: number | undefined = undefined;
+  if ('historicalDailyTraffic' in formValues && formValues.historicalDailyTraffic !== undefined) {
+    resultHistoricalDailyTraffic = formValues.historicalDailyTraffic;
+  }
+
+
   return {
     ...directCalcOutput,
     metric,
@@ -127,7 +128,8 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
     realEstate,
     minimumDetectableEffect: mdeDecimal, // MDE as decimal
     significanceLevel,
-    historicalDailyTraffic, 
+    totalUsersInSelectedDuration: totalUsersInSelectedDuration, // For Excel-driven
+    historicalDailyTraffic: resultHistoricalDailyTraffic, // For Manual Calc
     targetExperimentDurationDays,
     exposureNeededPercentage,
   };

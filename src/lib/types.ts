@@ -1,8 +1,5 @@
 
 import { z } from 'zod';
-// Note: CalculateAIFlowOutputInternal from the AI flow is no longer directly used by MdeToSampleSizeCalculationResults
-// as the calculation is now done in the action. However, the structure is similar.
-// import type { CalculateAIFlowOutput as CalculateAIFlowOutputInternal } from '@/ai/flows/sample-size-calculator';
 import { 
   DEFAULT_MDE_PERCENT, 
   DEFAULT_STATISTICAL_POWER, 
@@ -21,7 +18,7 @@ export const MdeToSampleSizeFormSchema = z.object({
   minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be a positive number").default(DEFAULT_MDE_PERCENT),
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
-  historicalDailyTraffic: z.coerce.number({invalid_type_error: "Historical daily traffic must be a number"}).positive("Historical daily traffic must be positive if provided.").optional(),
+  totalUsersInSelectedDuration: z.coerce.number({invalid_type_error: "Total users must be a number"}).int().positive("Total users must be a positive integer.").optional(),
   targetExperimentDurationDays: z.coerce.number({invalid_type_error: "Duration must be a number"}).int().positive("Target duration must be a positive integer").default(14),
   lookbackDays: z.coerce.number().int().positive("Lookback days must be a positive integer").optional(), // Contextual, set by targetExperimentDurationDays when Excel is used
 }).refine(data => {
@@ -99,7 +96,11 @@ export type MdeToSampleSizeCalculationResults = DirectCalculationOutput & {
   minimumDetectableEffect: number; // MDE as decimal for consistency in results
   significanceLevel: number; // Alpha from form
   
-  historicalDailyTraffic?: number; // Calculated from Excel or from manual form
+  // For Manual Calculator
+  historicalDailyTraffic?: number; 
+  // For Excel-Driven MDE to Sample Size
+  totalUsersInSelectedDuration?: number;
+
   targetExperimentDurationDays: number; // From form
   exposureNeededPercentage?: number; // Calculated in action
 };

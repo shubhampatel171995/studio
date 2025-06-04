@@ -13,19 +13,22 @@ export function downloadMdeToSampleSizeReport(results: MdeToSampleSizeCalculatio
   reportContent += `- Metric Type: ${results.metricType || 'N/A'}\n`;
   reportContent += `- Real Estate: ${results.realEstate || 'N/A'}\n`;
   
-  const lookbackUsed = results.lookbackDays || results.targetExperimentDurationDays; // lookbackDays is set if Excel data for target duration was found
-  reportContent += `- Target Experiment Duration / Historical Data Lookback Used: ${formatNumber(lookbackUsed)} days\n`;
+  const lookbackContext = results.lookbackDays || results.targetExperimentDurationDays; 
+  reportContent += `- Target Experiment Duration / Historical Data Lookback Used: ${formatNumber(lookbackContext)} days\n`;
   
   reportContent += `- Target MDE: ${formatNumber(results.minimumDetectableEffect ? results.minimumDetectableEffect * 100 : null, 2, '%')}\n`;
   reportContent += `- Mean (Historical, for selected lookback/duration): ${formatNumber(results.mean, 4)}\n`;
   reportContent += `- Variance (Historical, for selected lookback/duration): ${formatNumber(results.variance, 6)}\n`;
   
-  if (results.historicalDailyTraffic !== undefined) {
-     const trafficSource = results.realEstate && results.metric && results.lookbackDays === results.targetExperimentDurationDays 
-                            ? "(derived from uploaded file's total users for the target duration)" 
-                            : "(manual input or no file match for target duration)";
-    reportContent += `- Historical Daily Traffic ${trafficSource}: ~${formatNumber(results.historicalDailyTraffic, 0)} users/day\n`;
+  let trafficSourceNote = "(manual input or no file match for target duration)";
+  if (results.realEstate && results.metric && results.lookbackDays === results.targetExperimentDurationDays && results.totalUsersInSelectedDuration !== undefined) {
+    trafficSourceNote = `(from uploaded file for the ${formatNumber(results.targetExperimentDurationDays)} days target duration)`;
   }
+  
+  if (results.totalUsersInSelectedDuration !== undefined) {
+    reportContent += `- Total Users for Target Duration ${trafficSourceNote}: ${formatNumber(results.totalUsersInSelectedDuration, 0)} users\n`;
+  }
+
 
   reportContent += `- Statistical Power: ${formatNumber(results.powerLevel ? results.powerLevel * 100 : null, 0, '%')}\n`;
   reportContent += `- Significance Level (Alpha): ${formatNumber(results.significanceLevel ? results.significanceLevel * 100 : null, 0, '%')}\n\n`;
@@ -35,10 +38,10 @@ export function downloadMdeToSampleSizeReport(results: MdeToSampleSizeCalculatio
   if (results.exposureNeededPercentage !== undefined) {
       const displayExposure = results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? formatNumber(results.exposureNeededPercentage,1,'%') : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A';
       reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): ${displayExposure}\n`;
-  } else if (results.historicalDailyTraffic && results.historicalDailyTraffic > 0) {
+  } else if (results.totalUsersInSelectedDuration && results.totalUsersInSelectedDuration > 0) {
       reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): N/A (Likely due to high sample size or low traffic for duration)\n`;
   } else {
-      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): N/A (Missing daily traffic data)\n`;
+      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): N/A (Missing total users data for the duration)\n`;
   }
   reportContent += `- Confidence Level: ${formatNumber(results.confidenceLevel ? results.confidenceLevel * 100 : null, 0, '%')}\n\n`;
 
@@ -139,4 +142,3 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
   document.body.removeChild(link);
   URL.revokeObjectURL(link.href);
 }
-
