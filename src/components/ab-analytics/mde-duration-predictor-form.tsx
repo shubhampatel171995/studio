@@ -41,10 +41,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { cn } from "@/lib/utils";
 import { downloadMdeDurationPredictorReport } from "@/components/ab-analytics/report-download";
 
+interface MdeDurationPredictorFormProps {
+  onResults: (results: MdeDurationPredictorResultRow[] | null) => void;
+  currentResults: MdeDurationPredictorResultRow[] | null;
+}
 
-export function MdeDurationPredictorForm() {
+export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurationPredictorFormProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState<MdeDurationPredictorResultRow[] | null>(null);
   const [parsedExcelData, setParsedExcelData] = useState<ExcelDataRow[] | null>(null);
   
   const [availableMetrics, setAvailableMetrics] = useState<string[]>(DEFAULT_METRIC_OPTIONS);
@@ -118,7 +121,7 @@ export function MdeDurationPredictorForm() {
 
   async function onSubmit(values: MdeDurationPredictorFormValues) {
     setIsLoading(true);
-    setResults(null);
+    onResults(null);
     const aggregatedResults: MdeDurationPredictorResultRow[] = [];
 
     for (const duration of PREDICTION_DURATIONS) {
@@ -196,20 +199,26 @@ export function MdeDurationPredictorForm() {
         });
       }
     }
-    setResults(aggregatedResults);
+    onResults(aggregatedResults);
     setIsLoading(false);
     toast({ title: "Duration Prediction Complete", description: "Results table updated below." });
   }
   
   const handleDownloadReport = () => {
-    if (results && form.formState.isValid) {
-      downloadMdeDurationPredictorReport(form.getValues(), results);
+    if (currentResults && form.formState.isValid) {
+      downloadMdeDurationPredictorReport(form.getValues(), currentResults);
     } else {
        toast({ variant: "destructive", title: "Cannot Download Report", description: "Please calculate results first or ensure form inputs are valid." });
     }
   };
   
   const isVarianceBaselineReadOnly = selectedMetricType === "Binary" && !isNaN(meanBaseline) && meanBaseline >= 0 && meanBaseline <= 1;
+
+  // Function to clear results when key inputs change
+  const clearResultsOnInputChange = () => {
+    onResults(null);
+  };
+
 
   return (
     <div className="space-y-6">
@@ -233,13 +242,13 @@ export function MdeDurationPredictorForm() {
                                 <FormField control={form.control} name="statisticalPower" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Statistical Power (1 - β)</FormLabel>
-                                    <FormControl><Input type="number" placeholder="e.g., 0.8" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="0.01" min="0.01" max="0.99" /></FormControl>
+                                    <FormControl><Input type="number" placeholder="e.g., 0.8" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="0.01" min="0.01" max="0.99" /></FormControl>
                                     <FormDescription className="text-xs">Typically 0.8 (80%).</FormDescription><FormMessage />
                                 </FormItem>)} />
                                 <FormField control={form.control} name="significanceLevel" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Significance Level (α)</FormLabel>
-                                    <FormControl><Input type="number" placeholder="e.g., 0.05" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="0.01" min="0.01" max="0.99" /></FormControl>
+                                    <FormControl><Input type="number" placeholder="e.g., 0.05" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="0.01" min="0.01" max="0.99" /></FormControl>
                                     <FormDescription className="text-xs">Typically 0.05 (5%).</FormDescription><FormMessage />
                                 </FormItem>)} />
                             </div>
@@ -255,7 +264,7 @@ export function MdeDurationPredictorForm() {
               <FormField control={form.control} name="metric" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Metric</FormLabel>
-                  <Select onValueChange={(value) => { field.onChange(value); setResults(null);}} value={field.value} disabled={!availableMetrics.length}>
+                  <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange();}} value={field.value} disabled={!availableMetrics.length}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select Metric" /></SelectTrigger></FormControl>
                     <SelectContent>{availableMetrics.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
                   </Select>
@@ -264,7 +273,7 @@ export function MdeDurationPredictorForm() {
               <FormField control={form.control} name="realEstate" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Real Estate</FormLabel>
-                  <Select onValueChange={(value) => { field.onChange(value); setResults(null); }} value={field.value} disabled={!selectedMetric || !availableRealEstates.length}>
+                  <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value} disabled={!selectedMetric || !availableRealEstates.length}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select Real Estate" /></SelectTrigger></FormControl>
                     <SelectContent>{availableRealEstates.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
                   </Select>
@@ -273,7 +282,7 @@ export function MdeDurationPredictorForm() {
               <FormField control={form.control} name="metricType" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Metric Type</FormLabel>
-                  <Select onValueChange={(value) => { field.onChange(value); setResults(null); form.setValue('varianceBaseline', NaN); }} value={field.value}>
+                  <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); form.setValue('varianceBaseline', NaN); }} value={field.value}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger></FormControl>
                     <SelectContent>{METRIC_TYPE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
                   </Select>
@@ -282,14 +291,14 @@ export function MdeDurationPredictorForm() {
               <FormField control={form.control} name="minimumDetectableEffect" render={({ field }) => (
                 <FormItem>
                   <FormLabel>MDE (%)</FormLabel>
-                  <FormControl><Input type="number" placeholder="e.g., 0.5" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any"/></FormControl>
+                  <FormControl><Input type="number" placeholder="e.g., 0.5" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="any"/></FormControl>
                   <FormDescription className="text-xs">Minimum change you want to detect.</FormDescription>
                   <FormMessage />
                 </FormItem>)} />
               <FormField control={form.control} name="numberOfVariants" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Number of Variants</FormLabel>
-                  <FormControl><Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} /></FormControl>
+                  <FormControl><Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} /></FormControl>
                   <FormDescription className="text-xs">Incl. control (min 2).</FormDescription>
                   <FormMessage />
                 </FormItem>)} />
@@ -301,14 +310,14 @@ export function MdeDurationPredictorForm() {
               <FormField control={form.control} name="meanBaseline" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Mean (Baseline/Default)</FormLabel>
-                  <FormControl><Input type="number" placeholder={selectedMetricType === 'Binary' ? "e.g., 0.1" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" /></FormControl>
+                  <FormControl><Input type="number" placeholder={selectedMetricType === 'Binary' ? "e.g., 0.1" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="any" /></FormControl>
                   <FormDescription className="text-xs">{selectedMetricType === 'Binary' ? "Proportion (0-1)." : "Average value."}</FormDescription>
                   <FormMessage />
                 </FormItem>)} />
               <FormField control={form.control} name="varianceBaseline" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Variance (Baseline/Default)</FormLabel>
-                  <FormControl><Input type="number" placeholder="e.g., 0.1275" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" readOnly={isVarianceBaselineReadOnly} /></FormControl>
+                  <FormControl><Input type="number" placeholder="e.g., 0.1275" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="any" readOnly={isVarianceBaselineReadOnly} /></FormControl>
                   {isVarianceBaselineReadOnly ? 
                       <FormDescription className="text-xs text-primary">Auto-calculated (p*(1-p))</FormDescription> :
                       <FormDescription className="text-xs">Enter metric variance.</FormDescription>
@@ -318,7 +327,7 @@ export function MdeDurationPredictorForm() {
               <FormField control={form.control} name="historicalDailyTrafficBaseline" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Historical Daily Traffic (Baseline)</FormLabel>
-                  <FormControl><Input type="number" placeholder="e.g., 10000" {...field} value={isNaN(field.value ?? NaN) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} /></FormControl>
+                  <FormControl><Input type="number" placeholder="e.g., 10000" {...field} value={isNaN(field.value ?? NaN) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} /></FormControl>
                   <FormDescription className="text-xs">Avg daily users. Used if specific duration data not found.</FormDescription>
                   <FormMessage />
                 </FormItem>)} />
@@ -329,7 +338,7 @@ export function MdeDurationPredictorForm() {
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Predict Durations
               </Button>
-              {results && (
+              {currentResults && (
                  <Button type="button" variant="outline" onClick={handleDownloadReport} className="w-full sm:w-auto" disabled={isLoading}>
                     <Download className="mr-2 h-4 w-4" /> Download Report
                  </Button>
@@ -338,8 +347,6 @@ export function MdeDurationPredictorForm() {
           </form>
         </FormProvider>
       </Form>
-
-      {results && <MdeDurationPredictorResultsDisplay results={results} />}
     </div>
   );
 }

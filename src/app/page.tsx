@@ -6,15 +6,17 @@ import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MdeToSampleSizeForm, MdeToSampleSizeResultsDisplay } from "@/components/ab-analytics/mde-to-sample-size-form";
 import { SampleSizeToMdeForm, SampleSizeToMdeResultsDisplay } from "@/components/ab-analytics/sample-size-to-mde-form";
-import { MdeDurationPredictorForm } from '@/components/ab-analytics/mde-duration-predictor-form'; // Import the new form
-import { type MdeToSampleSizeCalculationResults, type SampleSizeToMdeCalculationResults } from "@/lib/types";
+import { MdeDurationPredictorForm, MdeDurationPredictorResultsDisplay } from '@/components/ab-analytics/mde-duration-predictor-form';
+import { type MdeToSampleSizeCalculationResults, type SampleSizeToMdeCalculationResults, type MdeDurationPredictorResultRow } from "@/lib/types";
 import { downloadMdeToSampleSizeReport, downloadSampleSizeToMdeReport } from '@/components/ab-analytics/report-download';
 import { Calculator, Search, BarChartHorizontalBig, UploadCloud, NotebookPen, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 export default function ABalyticsPage() {
   const [mdeToSampleSizeResults, setMdeToSampleSizeResults] = useState<MdeToSampleSizeCalculationResults | null>(null);
   const [sampleSizeToMdeResults, setSampleSizeToMdeResults] = useState<SampleSizeToMdeCalculationResults | null>(null);
+  const [mdeDurationPredictorResults, setMdeDurationPredictorResults] = useState<MdeDurationPredictorResultRow[] | null>(null);
 
   const handleMdeToSampleSizeResults = (results: MdeToSampleSizeCalculationResults | null) => {
     setMdeToSampleSizeResults(results);
@@ -22,6 +24,10 @@ export default function ABalyticsPage() {
 
   const handleSampleSizeToMdeResults = (results: SampleSizeToMdeCalculationResults | null) => {
     setSampleSizeToMdeResults(results);
+  };
+
+  const handleMdeDurationPredictorResults = (results: MdeDurationPredictorResultRow[] | null) => {
+    setMdeDurationPredictorResults(results);
   };
 
   const handleDownloadMdeToSampleSizeReport = () => {
@@ -100,7 +106,21 @@ export default function ABalyticsPage() {
 
           <TabsContent value="mde-to-duration">
             <div className="space-y-6">
-              <MdeDurationPredictorForm />
+              <Card className="w-full shadow-lg">
+                <CardHeader>
+                  <CardTitle className="font-headline text-2xl">MDE to Duration Predictor</CardTitle>
+                  <CardDescription>
+                    Enter your experiment parameters. The calculator will predict sample size and exposure for various durations (7, 14, 21, 30 days). Upload an Excel file via "Upload & Map Data" on the main page to auto-fill historical data for selected metrics and real estate.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <MdeDurationPredictorForm 
+                    onResults={handleMdeDurationPredictorResults}
+                    currentResults={mdeDurationPredictorResults}
+                  />
+                </CardContent>
+              </Card>
+              {mdeDurationPredictorResults && <MdeDurationPredictorResultsDisplay results={mdeDurationPredictorResults} />}
             </div>
           </TabsContent>
         </Tabs>
