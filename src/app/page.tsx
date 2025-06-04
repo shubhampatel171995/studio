@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MdeToSampleSizeForm, MdeToSampleSizeResultsDisplay } from "@/components/ab-analytics/mde-to-sample-size-form";
 import { SampleSizeToMdeForm, SampleSizeToMdeResultsDisplay } from "@/components/ab-analytics/sample-size-to-mde-form";
+import { MdeDurationPredictorForm } from '@/components/ab-analytics/mde-duration-predictor-form'; // Import the new form
 import { type MdeToSampleSizeCalculationResults, type SampleSizeToMdeCalculationResults } from "@/lib/types";
 import { downloadMdeToSampleSizeReport, downloadSampleSizeToMdeReport } from '@/components/ab-analytics/report-download';
 import { Calculator, Search, BarChartHorizontalBig, UploadCloud, NotebookPen, Clock } from 'lucide-react';
@@ -48,11 +49,6 @@ export default function ABalyticsPage() {
           </div>
           <div className="flex items-center gap-2">
             <Button asChild variant="outline">
-              <Link href="/mde-duration-predictor">
-                <Clock className="mr-2 h-4 w-4" /> MDE to Duration
-              </Link>
-            </Button>
-            <Button asChild variant="outline">
               <Link href="/manual-calculator">
                 <NotebookPen className="mr-2 h-4 w-4" /> Manual Calculator
               </Link>
@@ -68,12 +64,15 @@ export default function ABalyticsPage() {
 
       <main className="flex-1 container mx-auto p-4 md:p-8">
         <Tabs defaultValue="mde-to-sample-size" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:w-[400px] mb-6 mx-auto md:mx-0">
+          <TabsList className="grid w-full grid-cols-3 md:w-[600px] mb-6 mx-auto md:mx-0">
             <TabsTrigger value="mde-to-sample-size" className="text-sm md:text-base">
               <Calculator className="mr-2 h-4 w-4" /> MDE to Sample Size
             </TabsTrigger>
             <TabsTrigger value="sample-size-to-mde" className="text-sm md:text-base">
               <Search className="mr-2 h-4 w-4" /> Sample Size to MDE
+            </TabsTrigger>
+            <TabsTrigger value="mde-to-duration" className="text-sm md:text-base">
+              <Clock className="mr-2 h-4 w-4" /> MDE to Duration
             </TabsTrigger>
           </TabsList>
           
@@ -96,6 +95,12 @@ export default function ABalyticsPage() {
                 currentResults={sampleSizeToMdeResults}
               />
               {sampleSizeToMdeResults && <SampleSizeToMdeResultsDisplay results={sampleSizeToMdeResults} />}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="mde-to-duration">
+            <div className="space-y-6">
+              <MdeDurationPredictorForm />
             </div>
           </TabsContent>
         </Tabs>
