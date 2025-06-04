@@ -80,9 +80,8 @@ export function ManualCalculatorForm() {
         statisticalPower: values.statisticalPower,
         significanceLevel: values.significanceLevel,
         numberOfVariants: values.numberOfVariants,
-        // For manual calculator, we pass historicalDailyTraffic directly
-        // totalUsersInSelectedDuration will be calculated within the action if historicalDailyTraffic and targetExperimentDurationDays are provided
-        historicalDailyTraffic: values.historicalDailyTraffic,
+        // For manual calculator, totalUsersInSelectedDuration is calculated from daily traffic and duration
+        totalUsersInSelectedDuration: values.historicalDailyTraffic * values.targetExperimentDurationDays,
         targetExperimentDurationDays: values.targetExperimentDurationDays,
         lookbackDays: values.targetExperimentDurationDays, 
         realEstate: "Manual Input", 
@@ -99,7 +98,7 @@ export function ManualCalculatorForm() {
         minimumDetectableEffect: values.minimumDetectableEffect / 100, 
         significanceLevel: values.significanceLevel,
         numberOfVariants: values.numberOfVariants,
-        historicalDailyTraffic: values.historicalDailyTraffic,
+        totalUsersInSelectedDuration: values.historicalDailyTraffic * values.targetExperimentDurationDays,
         targetExperimentDurationDays: values.targetExperimentDurationDays,
         lookbackDays: values.targetExperimentDurationDays,
         realEstate: "Manual Input",
@@ -145,8 +144,9 @@ export function ManualCalculatorForm() {
           ...results, 
           metricType: form.getValues("metricType"), 
           targetExperimentDurationDays: form.getValues("targetExperimentDurationDays"),
-          historicalDailyTraffic: form.getValues("historicalDailyTraffic"),
           numberOfVariants: form.getValues("numberOfVariants"),
+          // Pass the derived total users for consistency in reporting
+          totalUsersInSelectedDuration: form.getValues("historicalDailyTraffic") * form.getValues("targetExperimentDurationDays"),
       };
       downloadManualCalculatorReport(reportData);
     } else {
@@ -188,9 +188,9 @@ export function ManualCalculatorForm() {
                   <FormItem>
                     <FormLabel>Minimum Detectable Effect (MDE %)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 2 for 2%" {...field} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" value={isNaN(field.value) ? '' : field.value}/>
+                      <Input type="number" placeholder="e.g., 0.5 for 0.5%" {...field} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" value={isNaN(field.value) ? '' : field.value}/>
                     </FormControl>
-                    <FormDescription className="text-xs">Enter as a percentage, e.g., 2 for 2%.</FormDescription>
+                    <FormDescription className="text-xs">Enter as a percentage, e.g., 0.5 for 0.5%.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -318,11 +318,6 @@ export function ManualCalculatorForm() {
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Calculate Sample Size
             </Button>
-            {results && (results.requiredSampleSizePerVariant !== undefined || (results.warnings && results.warnings.length > 0)) && (
-                <Button type="button" variant="outline" onClick={handleDownloadReport} className="w-full sm:w-auto">
-                    <Download className="mr-2 h-4 w-4" /> Download Report
-                </Button>
-            )}
             </div>
         </form>
         </Form>
@@ -337,7 +332,7 @@ interface ManualCalculatorResultsDisplayProps {
 }
 
 export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResultsDisplayProps) {
-  const dailyUsers = results.historicalDailyTraffic || 0; 
+  const dailyUsers = results.totalUsersInSelectedDuration && results.targetExperimentDurationDays ? results.totalUsersInSelectedDuration / results.targetExperimentDurationDays : 0;
   const targetDurationDays = results.targetExperimentDurationDays;
   const numberOfVariants = results.numberOfVariants || 2; 
   
@@ -347,15 +342,14 @@ export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResu
      return null; 
   }
 
-  // If there's no sample size but there are warnings, we only show warnings.
   const onlyShowWarnings = results.requiredSampleSizePerVariant === undefined && results.warnings && results.warnings.length > 0;
 
   const totalRequiredSampleSize = results.requiredSampleSizePerVariant ? results.requiredSampleSizePerVariant * numberOfVariants : undefined;
 
   let targetDurationInfo: { usersAvailable?: number; isSufficient?: boolean, exposureNeeded?: number } = {};
-  if (targetDurationDays && dailyUsers > 0 && results.requiredSampleSizePerVariant && results.requiredSampleSizePerVariant > 0) {
+  if (targetDurationDays && dailyUsers > 0 && results.requiredSampleSizePerVariant && results.requiredSampleSizePerVariant > 0 && results.totalUsersInSelectedDuration) {
     const totalRequiredForExposure = results.requiredSampleSizePerVariant * numberOfVariants;
-    targetDurationInfo.usersAvailable = dailyUsers * targetDurationDays; // Total users for the duration based on daily traffic
+    targetDurationInfo.usersAvailable = results.totalUsersInSelectedDuration;
     targetDurationInfo.isSufficient = targetDurationInfo.usersAvailable >= totalRequiredForExposure;
     if(targetDurationInfo.usersAvailable > 0) {
         targetDurationInfo.exposureNeeded = (totalRequiredForExposure / targetDurationInfo.usersAvailable) * 100;
@@ -366,20 +360,12 @@ export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResu
   return (
     <Card className="mt-8 w-full shadow-lg">
       <CardHeader>
-        <CardTitle className="font-headline text-2xl">Calculation Results</CardTitle>
+        <CardTitle className="font-headline text-2xl">Results</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {onlyShowWarnings && (
              <div className="mt-4">
-                <h3 className="font-medium text-lg flex items-center text-destructive">
-                <AlertTriangle className="mr-2 h-5 w-5" />
-                Notices from Calculation
-                </h3>
-                <ul className="list-disc list-inside space-y-1 pl-2 text-destructive bg-destructive/10 p-3 rounded-md">
-                {results.warnings!.map((warning, index) => (
-                    <li key={index} className="text-sm text-destructive">{warning.replace(/_/g, ' ')}</li>
-                ))}
-                </ul>
+               {/* Warnings section removed as per request */}
             </div>
         )}
         {!onlyShowWarnings && results.requiredSampleSizePerVariant === undefined && (!results.warnings || results.warnings.length === 0) && (
@@ -400,16 +386,12 @@ export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResu
              {results.exposureNeededPercentage !== undefined && results.targetExperimentDurationDays && dailyUsers > 0 && (
                 <div>
                     <p className="font-medium text-muted-foreground">Exposure Needed for {results.targetExperimentDurationDays} days</p>
-                    <p className="text-2xl font-semibold text-accent">
+                    <p className="text-2xl font-semibold text-primary">
                         {results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? `${results.exposureNeededPercentage.toFixed(1)}%` : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A'}
                     </p>
                      <p className="text-xs text-muted-foreground">(Based on ~{Math.round(dailyUsers).toLocaleString()} daily users for {numberOfVariants} variants)</p>
                 </div>
             )}
-             <div>
-                <p className="font-medium text-muted-foreground">Number of Variants</p>
-                <p className="text-lg text-accent">{numberOfVariants}</p>
-            </div>
             </div>
         )}
         
@@ -420,7 +402,7 @@ export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResu
                     <p>Estimated total available users: <strong>{Math.round(targetDurationInfo.usersAvailable).toLocaleString()}</strong>.</p>
                     <p>This is {targetDurationInfo.isSufficient ? <strong className="font-semibold">sufficient</strong> : <strong className="font-semibold">not sufficient</strong>} for the total required sample size of {totalRequiredSampleSize.toLocaleString()} ({numberOfVariants} variants).</p>
                     {targetDurationInfo.exposureNeeded !== undefined && (
-                        <p>Required exposure of daily traffic: <strong>{targetDurationInfo.exposureNeeded >=0 && targetDurationInfo.exposureNeeded <= 1000 ? `${targetDurationInfo.exposureNeeded.toFixed(1)}%` : targetDurationInfo.exposureNeeded > 1000 ? '>1000%' : 'N/A'}</strong>.</p>
+                        <p>Required exposure of traffic: <strong>{targetDurationInfo.exposureNeeded >=0 && targetDurationInfo.exposureNeeded <= 1000 ? `${targetDurationInfo.exposureNeeded.toFixed(1)}%` : targetDurationInfo.exposureNeeded > 1000 ? '>1000%' : 'N/A'}</strong>.</p>
                     )}
                 </div>
             )}

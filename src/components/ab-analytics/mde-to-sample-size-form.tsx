@@ -23,7 +23,7 @@ import {
 } from "@/lib/types";
 import { calculateSampleSizeAction } from "@/actions/ab-analytics-actions";
 import { useState, useEffect, useRef } from "react";
-import { Loader2, AlertTriangle, Download, SettingsIcon } from "lucide-react";
+import { Loader2, SettingsIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
@@ -45,6 +45,8 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
   const [availableRealEstates, setAvailableRealEstates] = useState<string[]>(DEFAULT_REAL_ESTATE_OPTIONS);
   const [isDataFromExcel, setIsDataFromExcel] = useState(false); 
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+  const [isHistoricalFieldReadOnly, setIsHistoricalFieldReadOnly] = useState(false);
+
 
   const { toast } = useToast();
 
@@ -55,7 +57,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       metricType: METRIC_TYPE_OPTIONS[1], 
       mean: NaN, 
       variance: NaN, 
-      realEstate: '',
+      realEstate: 'platform',
       minimumDetectableEffect: DEFAULT_MDE_PERCENT,
       statisticalPower: DEFAULT_STATISTICAL_POWER,
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
@@ -92,7 +94,6 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             form.setValue("metric", uniqueMetrics[0]);
         }
         
-        toast({ title: "Loaded previously uploaded data", description: `Using data from ${storedFileName}. Select Metric, Real Estate, and set Target Duration.`, variant: "default" });
       } catch (e) {
         console.error("Failed to parse stored data:", e);
         localStorage.removeItem('abalyticsMappedData');
@@ -100,13 +101,17 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
         setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
         setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS);
         setIsDataFromExcel(false);
+        setIsHistoricalFieldReadOnly(false);
       }
     } else {
         setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
         setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS);
         setIsDataFromExcel(false);
+        setIsHistoricalFieldReadOnly(false);
         if (!form.getValues("metric") && DEFAULT_METRIC_OPTIONS.length > 0) form.setValue("metric", DEFAULT_METRIC_OPTIONS[0]);
-        if (!form.getValues("realEstate") && DEFAULT_REAL_ESTATE_OPTIONS.length > 0) form.setValue("realEstate", DEFAULT_REAL_ESTATE_OPTIONS[0]);
+        if (!form.getValues("realEstate") && DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !form.getValues("realEstate")) {
+             form.setValue("realEstate", "platform"); // Default real estate
+        }
     }
   }, [form, toast]);
 
@@ -119,16 +124,20 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       
       const currentFormRealEstate = form.getValues("realEstate");
       if (uniqueRealEstates.length > 0) {
-        if (!uniqueRealEstates.includes(currentFormRealEstate)) {
+        if (!uniqueRealEstates.includes(currentFormRealEstate) && currentFormRealEstate !== 'platform') { // Don't override if it's already the default 'platform'
           form.setValue("realEstate", uniqueRealEstates[0]);
+        } else if (!currentFormRealEstate && !uniqueRealEstates.includes('platform')) { // If current is empty and 'platform' isn't an option from file
+            form.setValue("realEstate", uniqueRealEstates[0]);
+        } else if (!currentFormRealEstate && uniqueRealEstates.includes('platform')) {
+             form.setValue("realEstate", 'platform');
         }
       } else if (DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !parsedExcelData?.length) { 
-          form.setValue("realEstate", DEFAULT_REAL_ESTATE_OPTIONS[0]);
+          form.setValue("realEstate", form.getValues("realEstate") || "platform");
       }
     } else if (!parsedExcelData) {
         setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS);
-        if (DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !form.getValues("realEstate")) {
-            form.setValue("realEstate", DEFAULT_REAL_ESTATE_OPTIONS[0]);
+         if (DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !form.getValues("realEstate")) {
+            form.setValue("realEstate", "platform");
         }
     }
   }, [parsedExcelData, selectedMetric, form]);
@@ -172,9 +181,9 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
         form.setValue("lookbackDays", matchedRow.lookbackDays || targetExperimentDuration, { shouldValidate: true }); 
         
         setIsDataFromExcel(true); 
+        setIsHistoricalFieldReadOnly(true);
         if (isUserDrivenSelectorChange && valuesActuallyChangedByAutofill) {
             onResults(null); 
-            toast({ title: "Data auto-filled from file", description: `Values for ${selectedMetric} on ${selectedRealEstate} for ${targetExperimentDuration} days lookback applied.`, variant: "default" });
         }
       } else { 
         if(isDataFromExcel || isUserDrivenSelectorChange){ 
@@ -183,10 +192,10 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             form.setValue("totalUsersInSelectedDuration", NaN);
             form.setValue("lookbackDays", targetExperimentDuration); 
             setIsDataFromExcel(false); 
+            setIsHistoricalFieldReadOnly(false);
         }
         if (isUserDrivenSelectorChange && parsedExcelData.length > 0) { 
             onResults(null);
-            toast({ title: "No matching historical data for target duration", description: `No data found in file for ${targetExperimentDuration} days lookback for ${selectedMetric} on ${selectedRealEstate}. Input parameters manually.`, variant: "default" });
         }
       }
     } else if (!parsedExcelData && isUserDrivenSelectorChange) { 
@@ -195,6 +204,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             form.setValue("variance", NaN);
             form.setValue("totalUsersInSelectedDuration", NaN);
             setIsDataFromExcel(false);
+            setIsHistoricalFieldReadOnly(false);
             onResults(null);
         }
     }
@@ -256,17 +266,16 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
     }
   }
   
-  const isVarianceReadOnlyForBinary = selectedMetricType === "Binary" && !isNaN(currentMean) && currentMean >= 0 && currentMean <= 1 && !isDataFromExcel;
-  const isHistoricalFieldReadOnly = isDataFromExcel;
+  const isVarianceReadOnlyForBinary = selectedMetricType === "Binary" && !isNaN(currentMean) && currentMean >= 0 && currentMean <= 1 && !isHistoricalFieldReadOnly;
 
   return (
     <Card className="w-full shadow-lg">
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-start justify-between">
         <div>
-            <CardTitle className="font-headline text-2xl">MDE to Sample Size Inputs</CardTitle>
+            <CardTitle className="font-headline text-2xl">MDE to Sample Size</CardTitle>
             <p className="text-muted-foreground text-xs mt-1">
             {uploadedFileName 
-                ? `Using data from "${uploadedFileName}". Select Metric, Real Estate, and Target Duration to auto-fill historical data.`
+                ? `Using data from "${uploadedFileName}". Select Metric, Real Estate, and Target Duration to auto-fill data.`
                 : 'Enter parameters or upload a data file via "Upload & Map Data" for auto-fill.'
             }
             </p>
@@ -281,7 +290,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>Advanced Statistical Settings</DialogTitle>
-                    <FormDescription>
+                    <FormDescription className="text-xs">
                         Adjust statistical power and significance level (alpha).
                     </FormDescription>
                 </DialogHeader>
@@ -381,7 +390,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                 render={({ field }) => (
                 <FormItem>
                     <FormLabel>Metric Type</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); onResults(null); setIsDataFromExcel(false); form.setValue('variance', NaN); }} value={field.value}>
+                    <Select onValueChange={(value) => { field.onChange(value); onResults(null); setIsDataFromExcel(false); setIsHistoricalFieldReadOnly(false); form.setValue('variance', NaN); }} value={field.value}>
                     <FormControl>
                         <SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger>
                     </FormControl>
@@ -400,9 +409,9 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Minimum Detectable Effect (MDE %)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 2 for 2%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="any"/>
+                      <Input type="number" placeholder="e.g., 0.5 for 0.5%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="any"/>
                     </FormControl>
-                    <FormDescription className="text-xs">Enter as a percentage, e.g., 2 for 2%.</FormDescription>
+                    <FormDescription className="text-xs">Enter as a percentage, e.g., 0.5 for 0.5%.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -449,7 +458,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Mean (Historical)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder={selectedMetricType === 'Binary' ? "e.g., 0.1 for 10%" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) setIsDataFromExcel(false);}} step="any" readOnly={isHistoricalFieldReadOnly} />
+                      <Input type="number" placeholder={selectedMetricType === 'Binary' ? "e.g., 0.1 for 10%" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) {setIsDataFromExcel(false); setIsHistoricalFieldReadOnly(false);}}} step="any" readOnly={isHistoricalFieldReadOnly} />
                     </FormControl>
                     {isHistoricalFieldReadOnly ? <FormDescription className="text-xs text-primary">Value from file</FormDescription> :
                     <FormDescription className="text-xs">{selectedMetricType === 'Binary' ? "Proportion (0-1)." : "Average value."}</FormDescription>}
@@ -464,7 +473,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Variance (Historical)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 0.1275" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) setIsDataFromExcel(false);}} step="any" readOnly={isHistoricalFieldReadOnly || isVarianceReadOnlyForBinary} />
+                      <Input type="number" placeholder="e.g., 0.1275" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) {setIsDataFromExcel(false); setIsHistoricalFieldReadOnly(false);}}} step="any" readOnly={isHistoricalFieldReadOnly || isVarianceReadOnlyForBinary} />
                     </FormControl>
                     {(isHistoricalFieldReadOnly ) ? <FormDescription className="text-xs text-primary">Value from file</FormDescription> :
                     (isVarianceReadOnlyForBinary) ? <FormDescription className="text-xs text-primary">Auto-calculated (p*(1-p))</FormDescription> :
@@ -485,12 +494,12 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                             placeholder="e.g., 70000" 
                             {...field} 
                             value={isNaN(field.value ?? NaN) ? '' : field.value}
-                            onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) setIsDataFromExcel(false);}}
+                            onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) {setIsDataFromExcel(false); setIsHistoricalFieldReadOnly(false);}}}
                             readOnly={isHistoricalFieldReadOnly} 
                         />
                         </FormControl>
                         {isHistoricalFieldReadOnly ? 
-                            <FormDescription className="text-xs text-primary">Value from file for the {targetExperimentDuration}-day duration.</FormDescription> :
+                            <FormDescription className="text-xs text-primary">From uploaded file for the selected {targetExperimentDuration}-day duration.</FormDescription> :
                             <FormDescription className="text-xs">Enter total unique users for your target experiment duration.</FormDescription>
                         }
                         <FormMessage />
@@ -504,11 +513,6 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Calculate Sample Size
               </Button>
-              {currentResults && (currentResults.requiredSampleSizePerVariant !== undefined || (currentResults.warnings && currentResults.warnings.length > 0)) && (
-                 <Button type="button" variant="outline" onClick={() => currentResults && onDownload(currentResults)} className="w-full sm:w-auto">
-                    <Download className="mr-2 h-4 w-4" /> Download Report
-                 </Button>
-              )}
             </div>
           </form>
         </Form>
@@ -524,13 +528,11 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
   
   const shouldShowCard = results.requiredSampleSizePerVariant !== undefined || (results.warnings && results.warnings.length > 0);
 
-  if (!shouldShowCard && (!results.warnings || results.warnings.length === 0) ) { // Also hide if only warnings but no sample size
+  if (!shouldShowCard && (!results.warnings || results.warnings.length === 0) ) {
      return null; 
   }
   
-  // If there's no sample size but there are warnings, we only show warnings.
   const onlyShowWarnings = results.requiredSampleSizePerVariant === undefined && results.warnings && results.warnings.length > 0;
-
 
   const totalUsersForDisplay = results.totalUsersInSelectedDuration && results.totalUsersInSelectedDuration > 0 ? results.totalUsersInSelectedDuration : 0;
   const totalRequiredSampleSize = results.requiredSampleSizePerVariant && results.numberOfVariants ? results.requiredSampleSizePerVariant * results.numberOfVariants : undefined;
@@ -539,20 +541,12 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
   return (
     <Card className="mt-8 w-full shadow-lg">
       <CardHeader>
-        <CardTitle className="font-headline text-2xl">MDE to Sample Size Results</CardTitle>
+        <CardTitle className="font-headline text-2xl">Results</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {onlyShowWarnings && (
             <div className="mt-4">
-                <h3 className="font-medium text-lg flex items-center text-destructive">
-                <AlertTriangle className="mr-2 h-5 w-5" />
-                Notices from Calculation
-                </h3>
-                <ul className="list-disc list-inside space-y-1 pl-2 text-destructive bg-destructive/10 p-3 rounded-md">
-                {results.warnings!.map((warning, index) => (
-                    <li key={index} className="text-sm text-destructive">{warning.replace(/_/g, ' ')}</li>
-                ))}
-                </ul>
+               {/* Warnings section removed as per request */}
             </div>
         )}
 
@@ -575,7 +569,7 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
                  {results.exposureNeededPercentage !== undefined && results.targetExperimentDurationDays && totalUsersForDisplay > 0 && (
                     <div>
                         <p className="font-medium text-muted-foreground">Exposure Needed for {results.targetExperimentDurationDays} days</p>
-                        <p className="text-2xl font-semibold text-accent">
+                        <p className="text-2xl font-semibold text-primary">
                             {results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? `${results.exposureNeededPercentage.toFixed(1)}%` : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A'}
                         </p>
                         <p className="text-xs text-muted-foreground">(Based on ~{Math.round(totalUsersForDisplay).toLocaleString()} total users available over {results.targetExperimentDurationDays} days for {results.numberOfVariants} variants)</p>
@@ -585,12 +579,6 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
                      <div>
                         <p className="font-medium text-muted-foreground">Exposure Needed</p>
                         <p className="text-lg font-semibold text-destructive">Cannot calculate exposure without total users for the duration.</p>
-                    </div>
-                )}
-                 {results.numberOfVariants && (
-                    <div>
-                        <p className="font-medium text-muted-foreground">Number of Variants</p>
-                        <p className="text-lg text-accent">{results.numberOfVariants}</p>
                     </div>
                 )}
             </div>

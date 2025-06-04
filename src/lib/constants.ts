@@ -14,7 +14,7 @@ export const Z_BETA: Record<string, number> = {
 };
 
 export const DEFAULT_LOOKBACK_DAYS = 30;
-export const DEFAULT_MDE_PERCENT = 2; // MDE as a percentage for form display
+export const DEFAULT_MDE_PERCENT = 0.5; // MDE as a percentage for form display
 export const DEFAULT_STATISTICAL_POWER = 0.8;
 export const DEFAULT_SIGNIFICANCE_LEVEL = 0.05;
 export const DEFAULT_SAMPLE_SIZE_PER_VARIANT = 50000;
@@ -48,3 +48,4 @@ export const DURATION_OPTIONS_WEEKS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 // For Manual Calculator Metric Type dropdown
 export const METRIC_TYPE_OPTIONS = ["Binary", "Continuous"] as const;
+
