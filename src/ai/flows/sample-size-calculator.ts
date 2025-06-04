@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -80,37 +81,72 @@ const calculateSampleSizeFlow = ai.defineFlow(
     inputSchema: CalculateSampleSizeInputSchema,
     outputSchema: CalculateSampleSizeOutputSchema,
   },
-  async input => {
-    const warnings: string[] = [];
+  async (input: CalculateSampleSizeInput): Promise<CalculateSampleSizeOutput> => {
+    const flowSpecificWarnings: string[] = [];
 
     if (input.variance > input.mean * 2) {
-      warnings.push('Warning: The variance is high compared to the mean, which may affect the accuracy of the sample size calculation.');
+      flowSpecificWarnings.push('Warning: The variance is high compared to the mean, which may affect the accuracy of the sample size calculation.');
     }
-
     if (input.variance < input.mean * 0.1) {
-      warnings.push('Warning: The variance is low compared to the mean, which may affect the accuracy of the sample size calculation.');
+      flowSpecificWarnings.push('Warning: The variance is low compared to the mean, which may affect the accuracy of the sample size calculation.');
     }
 
-    // Estimate test duration based on daily users.
-    const dailyUsers = input.numberOfUsers / 30; // Assuming 30-day lookback window.
-    const estimatedTestDuration = input.requiredSampleSize / dailyUsers;
+    const { output: aiOutput } = await calculateSampleSizePrompt(input);
 
-    if (dailyUsers <= 0) {
-      warnings.push('Warning: Daily user count is zero or negative. Please provide a valid user count.');
+    if (!aiOutput) {
+      // This case should ideally be handled by Genkit/AI plugin error mechanisms,
+      // but as a defensive measure if it somehow results in a null/undefined output object.
+      throw new Error("AI model did not return a valid output structure for sample size calculation.");
     }
+    
+    // Use requiredSampleSize from AI for duration calculation.
+    // Default to 0 if not a valid number to prevent NaN issues in calculations.
+    const requiredSampleSizeFromAI = typeof aiOutput.requiredSampleSize === 'number' && isFinite(aiOutput.requiredSampleSize) 
+                                     ? aiOutput.requiredSampleSize 
+                                     : 0;
 
-    if (estimatedTestDuration > 28) {
-      warnings.push('Warning: The user base is insufficient to reach the required sample size in a reasonable timeframe (more than 4 weeks).');
+    let calculatedEstimatedTestDuration: number;
+
+    if (requiredSampleSizeFromAI > 0) {
+      // Assumption: input.numberOfUsers is total users over a 30-day period,
+      // consistent with how duration warnings were intended in original flow.
+      const dailyUsers = input.numberOfUsers / 30; 
+
+      if (dailyUsers > 0) {
+        calculatedEstimatedTestDuration = requiredSampleSizeFromAI / dailyUsers;
+        if (calculatedEstimatedTestDuration > 28) { // More than 4 weeks
+          flowSpecificWarnings.push('Warning: Based on the provided user count (assumed over 30 days), the estimated test duration to reach the required sample size is more than 4 weeks.');
+        }
+      } else {
+        flowSpecificWarnings.push('Warning: Daily user count (derived from input over 30 days) is zero or negative. Cannot accurately estimate test duration using flow logic.');
+        // Fallback to AI's estimatedTestDuration if available and valid, otherwise default to 0.
+        calculatedEstimatedTestDuration = typeof aiOutput.estimatedTestDuration === 'number' && isFinite(aiOutput.estimatedTestDuration) 
+                                          ? aiOutput.estimatedTestDuration 
+                                          : 0; 
+      }
+    } else {
+      flowSpecificWarnings.push('Warning: Required sample size from AI is zero, missing, or invalid. Cannot accurately estimate test duration using flow logic.');
+      // Fallback to AI's estimatedTestDuration if available and valid, otherwise default to 0.
+      calculatedEstimatedTestDuration = typeof aiOutput.estimatedTestDuration === 'number' && isFinite(aiOutput.estimatedTestDuration) 
+                                        ? aiOutput.estimatedTestDuration 
+                                        : 0;
+      if (requiredSampleSizeFromAI === 0 && aiOutput.requiredSampleSize === undefined) {
+        flowSpecificWarnings.push('Info: Required sample size from AI is missing.');
+      }
     }
-
-    const {output} = await calculateSampleSizePrompt(input);
+    
+    // Ensure the final duration is a finite number to match the schema (z.number()).
+    const finalEstimatedTestDuration = isFinite(calculatedEstimatedTestDuration) ? calculatedEstimatedTestDuration : 0;
 
     return {
-      ...output!,
-      estimatedTestDuration,
-      confidenceLevel: 1 - input.significanceLevel,
-      powerLevel: input.statisticalPower,
-      warnings: [...(output?.warnings ?? []), ...warnings],
+      ...aiOutput, // Spread AI output first (includes its original warnings, requiredSampleSize, estimatedTestDuration etc.)
+      requiredSampleSize: requiredSampleSizeFromAI, // Use the validated/defaulted one from AI
+      estimatedTestDuration: finalEstimatedTestDuration, // Override with potentially more refined flow calculation or fallback
+      confidenceLevel: 1 - input.significanceLevel, // This is correctly calculated from input
+      powerLevel: input.statisticalPower, // This is correctly taken from input
+      // Merge warnings from AI and flow, then deduplicate
+      warnings: Array.from(new Set([...(aiOutput.warnings || []), ...flowSpecificWarnings])), 
     };
   }
 );
+
