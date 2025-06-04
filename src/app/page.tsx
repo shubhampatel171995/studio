@@ -8,7 +8,7 @@ import { MdeToSampleSizeForm, MdeToSampleSizeResultsDisplay } from "@/components
 import { SampleSizeToMdeForm, SampleSizeToMdeResultsDisplay } from "@/components/ab-analytics/sample-size-to-mde-form";
 import { type MdeToSampleSizeCalculationResults, type SampleSizeToMdeCalculationResults } from "@/lib/types";
 import { downloadMdeToSampleSizeReport, downloadSampleSizeToMdeReport } from '@/components/ab-analytics/report-download';
-import { Calculator, Search, BarChartHorizontalBig, UploadCloud } from 'lucide-react';
+import { Calculator, Search, BarChartHorizontalBig, UploadCloud, NotebookPen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function ABalyticsPage() {
@@ -46,11 +46,18 @@ export default function ABalyticsPage() {
               ABalytics
             </h1>
           </div>
-          <Button asChild variant="outline">
-            <Link href="/upload-data">
-              <UploadCloud className="mr-2 h-4 w-4" /> Upload & Map Data
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline">
+              <Link href="/manual-calculator">
+                <NotebookPen className="mr-2 h-4 w-4" /> Manual Calculator
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/upload-data">
+                <UploadCloud className="mr-2 h-4 w-4" /> Upload & Map Data
+              </Link>
+            </Button>
+          </div>
         </div>
       </header>
 

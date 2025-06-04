@@ -5,25 +5,27 @@ import { calculateSampleSize as calculateSampleSizeFlow, type CalculateAIFlowInp
 import type { MdeToSampleSizeFormValues, MdeToSampleSizeCalculationResults, SampleSizeToMdeFormValues, SampleSizeToMdeCalculationResults, DurationEstimateRow } from '@/lib/types';
 import { Z_ALPHA_DIV_2, Z_BETA, DURATION_OPTIONS_WEEKS } from '@/lib/constants';
 
-// Action for "MDE to Sample Size" flow
+// Action for "MDE to Sample Size" flow (used by both Excel-driven and Manual calculators)
 export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormValues): Promise<MdeToSampleSizeCalculationResults> {
   const { 
-    metric, 
+    metric, // Name of the metric (e.g., from Excel or "Manual - Binary")
     mean, 
     variance, 
-    numberOfUsers, 
-    lookbackDays, 
-    realEstate, 
+    numberOfUsers, // From Excel flow, or dummy for manual
+    lookbackDays,  // From Excel flow, or dummy for manual
+    realEstate,    // From Excel flow, or "Manual Input"
     minimumDetectableEffect, // This is MDE % from form
     statisticalPower, 
-    significanceLevel 
+    significanceLevel,
+    historicalDailyTraffic, // Directly from Manual Calculator form
+    inputType, // To differentiate logic if needed, though historicalDailyTraffic is primary flag now
   } = formValues;
 
   const localWarnings: string[] = [];
 
   try {
     const aiInput: CalculateAIFlowInput = {
-      metric,
+      metric, // Pass metric name for AI context
       mean,
       variance,
       minimumDetectableEffect: minimumDetectableEffect / 100, // Convert MDE % to decimal for AI
@@ -36,37 +38,43 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
     let finalRequiredSampleSize: number | undefined = aiResult.requiredSampleSize;
 
     if (finalRequiredSampleSize !== undefined) {
-      if (isNaN(finalRequiredSampleSize)) {
-        finalRequiredSampleSize = undefined; // Treat NaN as undefined
+      if (isNaN(finalRequiredSampleSize) || finalRequiredSampleSize <=0) {
+        finalRequiredSampleSize = undefined; 
       } else {
-        finalRequiredSampleSize = Math.ceil(finalRequiredSampleSize); // Ensure integer if it's a valid number
+        finalRequiredSampleSize = Math.ceil(finalRequiredSampleSize);
       }
     }
-
+    
     let durationEstimates: DurationEstimateRow[] | undefined = undefined;
+    let dailyUsersForDurationCalc = 0;
+
+    if (historicalDailyTraffic !== undefined && historicalDailyTraffic > 0) {
+        dailyUsersForDurationCalc = historicalDailyTraffic;
+    } else if (numberOfUsers !== undefined && lookbackDays !== undefined && numberOfUsers > 0 && lookbackDays > 0) {
+        dailyUsersForDurationCalc = numberOfUsers / lookbackDays;
+    }
+
 
     if (finalRequiredSampleSize === undefined || finalRequiredSampleSize <= 0) {
       localWarnings.push("AI could not determine a valid required sample size. Duration estimates cannot be calculated.");
-      finalRequiredSampleSize = undefined; // Ensure it's explicitly undefined for the result
+      finalRequiredSampleSize = undefined; 
     } else {
-        // Only calculate duration estimates if sample size is valid
-        const dailyUsers = numberOfUsers / lookbackDays;
-        if (isNaN(dailyUsers) || dailyUsers <= 0) {
-            localWarnings.push("Daily user count (from lookback data) is zero, negative, or could not be calculated. Cannot estimate test duration achievability.");
+        if (isNaN(dailyUsersForDurationCalc) || dailyUsersForDurationCalc <= 0) {
+            localWarnings.push("Daily user count is zero, negative, or could not be calculated. Cannot estimate test duration achievability.");
         } else {
-            durationEstimates = []; // Initialize as empty array
+            durationEstimates = []; 
             const requiredTotalSampleSize = finalRequiredSampleSize * 2; // Assuming 2 variants
 
             DURATION_OPTIONS_WEEKS.forEach(weeks => {
                 const durationInDays = weeks * 7;
-                const totalUsersAvailable = dailyUsers * durationInDays;
-                durationEstimates!.push({ // Use non-null assertion as we initialized it
+                const totalUsersAvailable = dailyUsersForDurationCalc * durationInDays;
+                durationEstimates!.push({ 
                     weeks,
                     totalUsersAvailable: Math.round(totalUsersAvailable),
                     isSufficient: totalUsersAvailable >= requiredTotalSampleSize,
                 });
             });
-            if (durationEstimates.length === 0) { // Should not happen if DURATION_OPTIONS_WEEKS is not empty
+            if (durationEstimates.length === 0) { 
                 durationEstimates = undefined;
             }
         }
@@ -84,17 +92,16 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
       metric,
       mean,
       variance,
-      numberOfUsers,
-      lookbackDays,
+      numberOfUsers, // Keep for reporting if available
+      lookbackDays,  // Keep for reporting if available
       realEstate,
       minimumDetectableEffect: minimumDetectableEffect / 100, // MDE as decimal
       significanceLevel,
+      historicalDailyTraffic, // Keep for reporting if available
     };
 
   } catch (error) {
     console.error("Error in calculateSampleSizeAction:", error);
-    // The form's onSubmit will catch this and show a generic error toast.
-    // If specific error information needs to be passed back, this would need to return a result object with an error field.
     throw new Error(error instanceof Error ? error.message : "Failed to calculate sample size.");
   }
 }
@@ -132,18 +139,17 @@ export async function calculateMdeFromSampleSizeAction(formValues: SampleSizeToM
     return { warnings, achievableMde: undefined, confidenceLevel: 1 - significanceLevel, powerLevel: statisticalPower };
   }
 
-  const zAlphaDiv2 = Z_ALPHA_DIV_2[significanceLevel.toFixed(2)] || Z_ALPHA_DIV_2["0.05"];
-  const zBeta = Z_BETA[statisticalPower.toFixed(2)] || Z_BETA["0.80"];
+  const zAlphaDiv2Value = Z_ALPHA_DIV_2[significanceLevel.toFixed(2)] || Z_ALPHA_DIV_2["0.05"];
+  const zBetaValue = Z_BETA[statisticalPower.toFixed(2)] || Z_BETA["0.80"];
 
   // MDE_abs = (Z_alpha/2 + Z_beta) * sqrt(2 * variance / N_per_group)
-  const mdeAbsolute = (zAlphaDiv2 + zBeta) * Math.sqrt((2 * variance) / sampleSizePerVariant);
+  const mdeAbsolute = (zAlphaDiv2Value + zBetaValue) * Math.sqrt((2 * variance) / sampleSizePerVariant);
   
   // MDE_rel = MDE_abs / mean
   let mdeRelative = NaN;
-  if (mean > 0) { // This check is technically redundant due to validation above, but good for clarity
+  if (mean > 0) { 
     mdeRelative = (mdeAbsolute / mean) * 100; // As percentage
   } else {
-    // This case should be caught by validation now
     warnings.push("Mean is zero or negative, cannot calculate relative MDE. Absolute MDE calculated.");
   }
   
@@ -159,4 +165,3 @@ export async function calculateMdeFromSampleSizeAction(formValues: SampleSizeToM
     powerLevel: statisticalPower,
   };
 }
-

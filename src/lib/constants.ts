@@ -43,5 +43,8 @@ export const METRIC_OPTIONS = [
   "total__log_mall_gmv_visitor"
 ];
 
-// For "MDE to Sample Size" results table
+// For "MDE to Sample Size" results table (used by both Excel-driven and Manual calculators)
 export const DURATION_OPTIONS_WEEKS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+// For Manual Calculator Metric Type dropdown
+export const METRIC_TYPE_OPTIONS = ["Binary", "Continuous"] as const;
