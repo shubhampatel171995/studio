@@ -24,7 +24,7 @@ import {
 import { calculateSampleSizeAction } from "@/actions/ab-analytics-actions";
 import { useState, useEffect, useRef } from "react";
 import { Loader2, SettingsIcon, AlertTriangle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"; // Added CardDescription
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { METRIC_OPTIONS as DEFAULT_METRIC_OPTIONS, REAL_ESTATE_OPTIONS as DEFAULT_REAL_ESTATE_OPTIONS, DEFAULT_MDE_PERCENT, DEFAULT_STATISTICAL_POWER, DEFAULT_SIGNIFICANCE_LEVEL, METRIC_TYPE_OPTIONS } from "@/lib/constants";
@@ -37,6 +37,9 @@ interface MdeToSampleSizeFormProps {
   currentResults: MdeToSampleSizeCalculationResults | null;
 }
 
+// This component is now effectively deprecated for the main page,
+// but kept for the Manual Calculator and potentially Dynamic Duration Calculator.
+// It should be simplified or refactored if its role changes significantly.
 export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: MdeToSampleSizeFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [parsedExcelData, setParsedExcelData] = useState<ExcelDataRow[] | null>(null);
@@ -63,7 +66,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
       targetExperimentDurationDays: 14,
       totalUsersInSelectedDuration: NaN,
-      lookbackDays: 14, 
+      // lookbackDays: 14, // This was part of old schema, ensure it's handled if this form is reused
       numberOfVariants: 2,
     },
   });
@@ -177,7 +180,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             valuesActuallyChangedByAutofill = true;
         }
 
-        form.setValue("lookbackDays", matchedRow.lookbackDays || targetExperimentDuration, { shouldValidate: true }); 
+        // form.setValue("lookbackDays", matchedRow.lookbackDays || targetExperimentDuration, { shouldValidate: true }); 
         
         setIsHistoricalFieldReadOnly(true);
         if (isUserDrivenSelectorChange && valuesActuallyChangedByAutofill) {
@@ -188,7 +191,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             form.setValue("mean", NaN);
             form.setValue("variance", NaN);
             form.setValue("totalUsersInSelectedDuration", NaN);
-            form.setValue("lookbackDays", targetExperimentDuration); 
+            // form.setValue("lookbackDays", targetExperimentDuration); 
             setIsHistoricalFieldReadOnly(false); 
         }
         if (isUserDrivenSelectorChange && parsedExcelData.length > 0) { 
@@ -269,9 +272,9 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       <CardHeader className="flex flex-row items-start justify-between">
         <div>
             <CardTitle className="font-headline text-2xl">MDE to Sample Size</CardTitle>
-             <p className="text-muted-foreground text-xs mt-1">
+             <CardDescription className="text-xs mt-1">
                 {!uploadedFileName ? 'Enter parameters or upload a data file via "Upload & Map Data" for auto-fill.' : 'Select Metric, Real Estate, and Exp Duration to auto-fill historical data.'}
-            </p>
+            </CardDescription>
         </div>
         <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
             <DialogTrigger asChild>
@@ -296,7 +299,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                             <FormItem>
                                 <FormLabel>Statistical Power (1 - β)</FormLabel>
                                 <FormControl>
-                                <Input type="number" placeholder="e.g., 0.8 for 80%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
+                                <Input type="number" placeholder="e.g., 0.8 for 80%" {...field} value={isNaN(field.value ?? NaN) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
                                 </FormControl>
                                 <FormDescription className="text-xs">Typically 0.8 (80%). Value between 0.01 and 0.99.</FormDescription>
                                 <FormMessage />
@@ -310,7 +313,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                             <FormItem>
                                 <FormLabel>Significance Level (α)</FormLabel>
                                 <FormControl>
-                                <Input type="number" placeholder="e.g., 0.05 for 5%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
+                                <Input type="number" placeholder="e.g., 0.05 for 5%" {...field} value={isNaN(field.value ?? NaN) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="0.01" min="0.01" max="0.99" />
                                 </FormControl>
                                 <FormDescription className="text-xs">Typically 0.05 (5%). Value between 0.01 and 0.99.</FormDescription>
                                 <FormMessage />
@@ -444,7 +447,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
               
               <Separator />
               <p className="text-sm font-medium text-foreground">
-                  Historical Data {isHistoricalFieldReadOnly ? `(auto-filled for ${targetExperimentDuration || form.getValues("lookbackDays")} days)` : `(manual input)`}
+                  Historical Data {isHistoricalFieldReadOnly ? `(auto-filled for ${targetExperimentDuration || form.getValues("targetExperimentDurationDays")} days)` : `(manual input)`}
               </p>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -595,4 +598,3 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
     </Card>
   );
 }
-

@@ -8,7 +8,7 @@ import {
   METRIC_TYPE_OPTIONS
 } from '@/lib/constants';
 
-// Schema for "MDE to Sample Size" flow (Excel/Platform Data Driven)
+// Schema for "MDE to Sample Size" flow (Excel/Platform Data Driven) - RETAINED FOR REFERENCE OR POTENTIAL DIRECT USE ELSEWHERE BUT NOT FOR MAIN TAB
 export const MdeToSampleSizeFormSchema = z.object({
   metric: z.string().min(1, "Metric is required"),
   metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }).default(METRIC_TYPE_OPTIONS[1]),
@@ -39,72 +39,9 @@ export const MdeToSampleSizeFormSchema = z.object({
     path: ["mean"],
   });
 
-
 export type MdeToSampleSizeFormValues = z.infer<typeof MdeToSampleSizeFormSchema>;
 
-
-// Schema for the new Manual Sample Size Calculator
-export const ManualCalculatorFormSchema = z.object({
-  metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }),
-  mean: z.coerce.number({invalid_type_error: "Mean must be a number"}).refine(val => !isNaN(val), "Mean must be a valid number"), 
-  variance: z.coerce.number({invalid_type_error: "Variance must be a number"}).nonnegative("Variance must be a non-negative number"),
-  minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be a positive number").default(DEFAULT_MDE_PERCENT),
-  historicalDailyTraffic: z.coerce.number({invalid_type_error: "Daily traffic must be a number"}).int().nonnegative("Historical daily traffic must be a non-negative integer").optional(),
-  targetExperimentDurationDays: z.coerce.number({invalid_type_error: "Duration must be a number"}).int().positive("Exp Duration must be a positive integer").default(14),
-  statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
-  significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
-  numberOfVariants: z.coerce.number().int().min(2, "Must have at least 2 variants").default(2),
-}).refine(data => { 
-    if (data.metricType === "Binary") {
-      return data.mean >= 0 && data.mean <= 1;
-    }
-    return true;
-  }, {
-    message: "For Binary metrics, Mean (proportion) must be between 0 and 1.",
-    path: ["mean"],
-  }).refine(data => { 
-    if (data.metricType === "Continuous" && data.mean <=0 && !isNaN(data.mean)) { 
-        return false;
-    }
-    return true;
-  }, {
-    message: "For Continuous metrics, Mean must be positive.",
-    path: ["mean"],
-});
-
-
-export type ManualCalculatorFormValues = z.infer<typeof ManualCalculatorFormSchema>;
-
-
-// This type is for the direct output from the calculateSampleSizeAction
-export interface DirectCalculationOutput {
-  requiredSampleSizePerVariant?: number; 
-  confidenceLevel?: number; // This is 1 - significanceLevel, kept for internal consistency if needed
-  powerLevel?: number; // Echoes back statisticalPower, kept for internal consistency
-  warnings?: string[];
-}
-
-// This is the comprehensive result type for the "MDE to Sample Size" feature, 
-// used by both Excel-driven and Manual calculators for displaying results.
-export type MdeToSampleSizeCalculationResults = DirectCalculationOutput & {
-  metric: string; 
-  metricType: typeof METRIC_TYPE_OPTIONS[number];
-  mean: number;
-  variance: number;
-  realEstate?: string; 
-  minimumDetectableEffect: number; // MDE as decimal for consistency in results
-  significanceLevel: number; // Alpha from form
-  numberOfVariants: number;
-  
-  historicalDailyTraffic?: number; // For Manual Calc
-  totalUsersInSelectedDuration?: number; // Total users for the targetExperimentDurationDays
-
-  targetExperimentDurationDays: number; 
-  exposureNeededPercentage?: number; 
-};
-
-
-// Schema for "Sample Size to MDE" flow
+// Schema for "Sample Size to MDE" flow - RETAINED FOR REFERENCE OR POTENTIAL DIRECT USE ELSEWHERE BUT NOT FOR MAIN TAB
 export const SampleSizeToMdeFormSchema = z.object({
   metric: z.string().min(1, "Metric is required"),
   metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }).default(METRIC_TYPE_OPTIONS[1]),
@@ -137,16 +74,137 @@ export const SampleSizeToMdeFormSchema = z.object({
 
 export type SampleSizeToMdeFormValues = z.infer<typeof SampleSizeToMdeFormSchema>;
 
-// This is the comprehensive result type for the "Sample Size to MDE" feature
-export interface SampleSizeToMdeCalculationResults {
-  inputs: SampleSizeToMdeFormValues; 
-  achievableMde?: number; // As percentage
+
+// Schema for the new Manual Sample Size Calculator
+export const ManualCalculatorFormSchema = z.object({
+  metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }),
+  mean: z.coerce.number({invalid_type_error: "Mean must be a number"}).refine(val => !isNaN(val), "Mean must be a valid number"), 
+  variance: z.coerce.number({invalid_type_error: "Variance must be a number"}).nonnegative("Variance must be a non-negative number"),
+  minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be a positive number").default(DEFAULT_MDE_PERCENT),
+  historicalDailyTraffic: z.coerce.number({invalid_type_error: "Daily traffic must be a number"}).int().nonnegative("Historical daily traffic must be a non-negative integer").optional(),
+  targetExperimentDurationDays: z.coerce.number({invalid_type_error: "Duration must be a number"}).int().positive("Exp Duration must be a positive integer").default(14),
+  statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
+  significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
+  numberOfVariants: z.coerce.number().int().min(2, "Must have at least 2 variants").default(2),
+}).refine(data => { 
+    if (data.metricType === "Binary") {
+      return data.mean >= 0 && data.mean <= 1;
+    }
+    return true;
+  }, {
+    message: "For Binary metrics, Mean (proportion) must be between 0 and 1.",
+    path: ["mean"],
+  }).refine(data => { 
+    if (data.metricType === "Continuous" && data.mean <=0 && !isNaN(data.mean)) { 
+        return false;
+    }
+    return true;
+  }, {
+    message: "For Continuous metrics, Mean must be positive.",
+    path: ["mean"],
+});
+
+export type ManualCalculatorFormValues = z.infer<typeof ManualCalculatorFormSchema>;
+
+// This type is for the direct output from the calculateSampleSizeAction or MDE calculation
+export interface DirectCalculationOutput {
+  requiredSampleSizePerVariant?: number; 
+  achievableMde?: number; // As percentage for MDE calculation
+  confidenceLevel?: number; 
+  powerLevel?: number; 
   warnings?: string[];
   exposureNeededPercentage?: number;
 }
 
+// This is the comprehensive result type for the MDE to Sample Size feature, 
+// used by both Excel-driven and Manual calculators for displaying results.
+// It can be adapted for the new combined calculator.
+export type MdeToSampleSizeCalculationResults = DirectCalculationOutput & {
+  metric: string; 
+  metricType: typeof METRIC_TYPE_OPTIONS[number];
+  mean: number;
+  variance: number;
+  realEstate?: string; 
+  minimumDetectableEffect: number; // MDE as decimal for consistency in results
+  significanceLevel: number; // Alpha from form
+  numberOfVariants: number;
+  historicalDailyTraffic?: number; // For Manual Calc
+  totalUsersInSelectedDuration?: number; // Total users for the targetExperimentDurationDays
+  targetExperimentDurationDays: number; 
+};
 
-// Schema for "MDE to Duration Predictor" flow
+// Result type for SampleSizeToMde - used for reference
+export interface SampleSizeToMdeCalculationResults {
+  inputs: SampleSizeToMdeFormValues; 
+  achievableMde?: number; // As percentage
+  warnings?: string[];
+  exposureNeededPercentage?: number; // Added
+}
+
+
+// Schema for the new "Fixed Duration Calculator"
+export const FixedDurationCalculatorFormSchema = z.object({
+  metric: z.string().min(1, "Metric is required"),
+  metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }).default(METRIC_TYPE_OPTIONS[1]),
+  mean: z.coerce.number({invalid_type_error: "Mean must be a number"}).refine(val => !isNaN(val), "Mean must be a valid number"),
+  variance: z.coerce.number({invalid_type_error: "Variance must be a number"}).nonnegative("Variance must be a non-negative number"),
+  realEstate: z.string().min(1, "Real Estate is required").default("platform"),
+  targetExperimentDurationDays: z.coerce.number({invalid_type_error: "Duration must be a number"}).int().positive("Exp Duration must be a positive integer").default(14),
+  totalUsersInSelectedDuration: z.coerce.number({invalid_type_error: "Total users must be a number"}).int().nonnegative("Total users for duration must be a non-negative integer.").optional(),
+  numberOfVariants: z.coerce.number().int().min(2, "Must have at least 2 variants").default(2),
+  
+  minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).optional(), // MDE as %
+  sampleSizePerVariant: z.coerce.number({invalid_type_error: "Sample size must be a number"}).int().optional(),
+
+  statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
+  significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
+}).refine(data => {
+    const mdeProvided = typeof data.minimumDetectableEffect === 'number' && data.minimumDetectableEffect > 0;
+    const ssProvided = typeof data.sampleSizePerVariant === 'number' && data.sampleSizePerVariant > 0;
+    return mdeProvided || ssProvided; // At least one must be provided
+  }, {
+    message: "Please provide either MDE (%) or Sample Size (per variant) for calculation.",
+    // path: ["minimumDetectableEffect"], // Could target a general form error display if available
+  })
+  .refine(data => {
+    if (data.metricType === "Binary") {
+      return data.mean >= 0 && data.mean <= 1;
+    }
+    return true;
+  }, {
+    message: "For Binary metrics, Mean (proportion) must be between 0 and 1.",
+    path: ["mean"],
+  })
+  .refine(data => {
+    if (data.metricType === "Continuous" && data.mean <=0 && !isNaN(data.mean)) { 
+        return false;
+    }
+    return true;
+  }, {
+    message: "For Continuous metrics, Mean must be positive.",
+    path: ["mean"],
+  });
+
+export type FixedDurationCalculatorFormValues = z.infer<typeof FixedDurationCalculatorFormSchema>;
+
+export interface FixedDurationCalculatorActionInput extends FixedDurationCalculatorFormValues {
+  // calculationMode: 'mdeToSs' | 'ssToMde'; // Mode can be inferred by the action based on inputs
+}
+
+export interface FixedDurationCalculatorResults {
+  inputs: FixedDurationCalculatorFormValues;
+  calculationMode: 'mdeToSs' | 'ssToMde';
+  calculatedMde?: number; // As percentage
+  calculatedSampleSizePerVariant?: number;
+  totalCalculatedSampleSizeForExperiment?: number;
+  exposureNeededPercentage?: number;
+  warnings?: string[];
+  confidenceLevel: number;
+  powerLevel: number;
+}
+
+
+// Schema for "Dynamic Duration Calculator" (formerly MDE to Duration Predictor)
 export const MdeDurationPredictorFormSchema = z.object({
   metric: z.string().min(1, "Metric is required. Please upload an Excel file with historical data."),
   realEstate: z.string().min(1, "Real Estate is required. Please upload an Excel file with historical data.").default("platform"),
@@ -161,13 +219,13 @@ export type MdeDurationPredictorFormValues = z.infer<typeof MdeDurationPredictor
 
 export interface MdeDurationPredictorResultRow {
   duration: number;
-  meanUsed: number | string;
-  varianceUsed: number | string;
+  // meanUsed: number | string; // Removed from display table
+  // varianceUsed: number | string; // Removed from display table
   totalUsersAvailable?: number | string;
-  requiredSampleSizePerVariant?: number | string;
+  // requiredSampleSizePerVariant?: number | string; // Removed from display table
   totalRequiredSampleSize?: number | string;
   exposureNeededPercentage?: number | string;
-  warnings?: string[];
+  warnings?: string[]; // Still collected for potential toast/report
 }
 
 export type MdeDurationPredictorResults = MdeDurationPredictorResultRow[];
@@ -193,4 +251,3 @@ export interface ExcelDataRow {
   lookbackDays?: number;
   [key: string]: any; 
 }
-

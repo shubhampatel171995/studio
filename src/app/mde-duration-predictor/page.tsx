@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-export default function DurationCalculatorPage() {
+export default function DynamicDurationCalculatorPage() { // Renamed function
   return (
     <div className="flex flex-col min-h-screen bg-background">
        <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -13,7 +13,7 @@ export default function DurationCalculatorPage() {
           <div className="flex items-center">
             <Clock className="h-8 w-8 mr-3 text-primary" />
             <h1 className="text-3xl font-bold font-headline tracking-tight text-foreground">
-              Duration Calculator
+              Dynamic Duration Calculator {/* Renamed title */}
             </h1>
           </div>
           <Button asChild variant="outline">

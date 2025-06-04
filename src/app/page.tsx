@@ -4,40 +4,65 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MdeToSampleSizeForm, MdeToSampleSizeResultsDisplay } from "@/components/ab-analytics/mde-to-sample-size-form";
-import { SampleSizeToMdeForm, SampleSizeToMdeResultsDisplay } from "@/components/ab-analytics/sample-size-to-mde-form";
+// import { MdeToSampleSizeForm, MdeToSampleSizeResultsDisplay } from "@/components/ab-analytics/mde-to-sample-size-form";
+// import { SampleSizeToMdeForm, SampleSizeToMdeResultsDisplay } from "@/components/ab-analytics/sample-size-to-mde-form";
+import { FixedDurationCalculatorForm, FixedDurationCalculatorResultsDisplay } from "@/components/ab-analytics/fixed-duration-calculator-form";
 import { MdeDurationPredictorForm, MdeDurationPredictorResultsDisplay } from '@/components/ab-analytics/mde-duration-predictor-form';
-import { type MdeToSampleSizeCalculationResults, type SampleSizeToMdeCalculationResults, type MdeDurationPredictorResultRow } from "@/lib/types";
-import { downloadMdeToSampleSizeReport, downloadSampleSizeToMdeReport } from '@/components/ab-analytics/report-download';
+import { 
+    type MdeToSampleSizeCalculationResults, // Keep for manual calculator and dynamic duration
+    type SampleSizeToMdeCalculationResults, 
+    type MdeDurationPredictorResultRow,
+    type FixedDurationCalculatorResults
+} from "@/lib/types";
+import { 
+    downloadMdeToSampleSizeReport, 
+    downloadSampleSizeToMdeReport,
+    downloadFixedDurationCalculatorReport, 
+    downloadMdeDurationPredictorReport 
+} from '@/components/ab-analytics/report-download';
 import { Calculator, Search, UploadCloud, NotebookPen, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function ABalyticsPage() {
-  const [mdeToSampleSizeResults, setMdeToSampleSizeResults] = useState<MdeToSampleSizeCalculationResults | null>(null);
-  const [sampleSizeToMdeResults, setSampleSizeToMdeResults] = useState<SampleSizeToMdeCalculationResults | null>(null);
+  // const [mdeToSampleSizeResults, setMdeToSampleSizeResults] = useState<MdeToSampleSizeCalculationResults | null>(null);
+  // const [sampleSizeToMdeResults, setSampleSizeToMdeResults] = useState<SampleSizeToMdeCalculationResults | null>(null);
+  const [fixedDurationCalculatorResults, setFixedDurationCalculatorResults] = useState<FixedDurationCalculatorResults | null>(null);
   const [mdeDurationPredictorResults, setMdeDurationPredictorResults] = useState<MdeDurationPredictorResultRow[] | null>(null);
 
-  const handleMdeToSampleSizeResults = (results: MdeToSampleSizeCalculationResults | null) => {
-    setMdeToSampleSizeResults(results);
-  };
+  // const handleMdeToSampleSizeResults = (results: MdeToSampleSizeCalculationResults | null) => {
+  //   setMdeToSampleSizeResults(results);
+  // };
 
-  const handleSampleSizeToMdeResults = (results: SampleSizeToMdeCalculationResults | null) => {
-    setSampleSizeToMdeResults(results);
+  // const handleSampleSizeToMdeResults = (results: SampleSizeToMdeCalculationResults | null) => {
+  //   setSampleSizeToMdeResults(results);
+  // };
+
+  const handleFixedDurationCalculatorResults = (results: FixedDurationCalculatorResults | null) => {
+    setFixedDurationCalculatorResults(results);
   };
 
   const handleMdeDurationPredictorResults = (results: MdeDurationPredictorResultRow[] | null) => {
     setMdeDurationPredictorResults(results);
   };
 
-  const handleDownloadMdeToSampleSizeReport = () => {
-    if (mdeToSampleSizeResults) {
-      downloadMdeToSampleSizeReport(mdeToSampleSizeResults);
+  const handleDownloadFixedDurationCalculatorReport = () => {
+    if (fixedDurationCalculatorResults) {
+      downloadFixedDurationCalculatorReport(fixedDurationCalculatorResults);
     }
   };
 
-  const handleDownloadSampleSizeToMdeReport = () => {
-    if (sampleSizeToMdeResults) {
-      downloadSampleSizeToMdeReport(sampleSizeToMdeResults);
+  const handleDownloadMdeDurationPredictorReport = () => {
+    if (mdeDurationPredictorResults && fixedDurationCalculatorResults?.inputs) { // Need some form values for the report
+        const formValuesForReport = { // Construct a compatible MdeDurationPredictorFormValues
+            metric: fixedDurationCalculatorResults.inputs.metric,
+            realEstate: fixedDurationCalculatorResults.inputs.realEstate,
+            metricType: fixedDurationCalculatorResults.inputs.metricType,
+            minimumDetectableEffect: fixedDurationCalculatorResults.inputs.minimumDetectableEffect || 0, // Default if not present
+            statisticalPower: fixedDurationCalculatorResults.inputs.statisticalPower,
+            significanceLevel: fixedDurationCalculatorResults.inputs.significanceLevel,
+            numberOfVariants: fixedDurationCalculatorResults.inputs.numberOfVariants,
+        };
+      downloadMdeDurationPredictorReport(formValuesForReport, mdeDurationPredictorResults);
     }
   };
 
@@ -62,42 +87,28 @@ export default function ABalyticsPage() {
       </header>
 
       <main className="flex-1 container mx-auto p-4 md:p-8">
-        <Tabs defaultValue="mde-to-sample-size" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 md:w-[700px] mb-6 mx-auto md:mx-0">
-            <TabsTrigger value="mde-to-sample-size" className="text-sm md:text-base">
-              <Calculator className="mr-2 h-4 w-4" /> MDE to Sample Size
+        <Tabs defaultValue="fixed-duration-calculator" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 md:w-[500px] mb-6 mx-auto md:mx-0">
+            <TabsTrigger value="fixed-duration-calculator" className="text-sm md:text-base">
+              <Calculator className="mr-2 h-4 w-4" /> Fixed Duration Calculator
             </TabsTrigger>
-            <TabsTrigger value="sample-size-to-mde" className="text-sm md:text-base">
-              <Search className="mr-2 h-4 w-4" /> Sample Size to MDE
-            </TabsTrigger>
-            <TabsTrigger value="duration-calculator" className="text-sm md:text-base">
-              <Clock className="mr-2 h-4 w-4" /> Duration Calculator
+            <TabsTrigger value="dynamic-duration-calculator" className="text-sm md:text-base">
+              <Clock className="mr-2 h-4 w-4" /> Dynamic Duration Calculator
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="mde-to-sample-size">
+          <TabsContent value="fixed-duration-calculator">
             <div className="space-y-6">
-              <MdeToSampleSizeForm 
-                onResults={handleMdeToSampleSizeResults} 
-                onDownload={handleDownloadMdeToSampleSizeReport}
-                currentResults={mdeToSampleSizeResults}
+              <FixedDurationCalculatorForm 
+                onResults={handleFixedDurationCalculatorResults} 
+                onDownload={handleDownloadFixedDurationCalculatorReport}
+                currentResults={fixedDurationCalculatorResults}
               />
-              {mdeToSampleSizeResults && <MdeToSampleSizeResultsDisplay results={mdeToSampleSizeResults} />}
+              {fixedDurationCalculatorResults && <FixedDurationCalculatorResultsDisplay results={fixedDurationCalculatorResults} />}
             </div>
           </TabsContent>
           
-          <TabsContent value="sample-size-to-mde">
-             <div className="space-y-6">
-              <SampleSizeToMdeForm
-                onResults={handleSampleSizeToMdeResults}
-                onDownload={handleDownloadSampleSizeToMdeReport}
-                currentResults={sampleSizeToMdeResults}
-              />
-              {sampleSizeToMdeResults && <SampleSizeToMdeResultsDisplay results={sampleSizeToMdeResults} />}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="duration-calculator">
+          <TabsContent value="dynamic-duration-calculator">
             <div className="space-y-6">
               <MdeDurationPredictorForm 
                 onResults={handleMdeDurationPredictorResults}

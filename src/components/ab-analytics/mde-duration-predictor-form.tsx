@@ -23,7 +23,7 @@ import {
 } from "@/lib/types";
 import { calculateSampleSizeAction } from "@/actions/ab-analytics-actions";
 import { useState, useEffect } from "react";
-import { Loader2, SettingsIcon, Download } from "lucide-react";
+import { Loader2, SettingsIcon, Download, AlertTriangle } from "lucide-react"; // Added AlertTriangle
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
@@ -133,18 +133,18 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     setIsLoading(true);
     onResults(null);
     const aggregatedResults: MdeDurationPredictorResultRow[] = [];
-    let calculationWarnings: string[] = []; 
+    let allCalculationWarnings: string[] = []; 
 
     for (const duration of PREDICTION_DURATIONS) {
-      let meanForCalc: number | string = 'N/A';
-      let varianceForCalc: number | string = 'N/A';
-      let totalUsersForDuration: number | string | undefined = 'N/A';
+      let meanForCalc: number | undefined = undefined;
+      let varianceForCalc: number | undefined = undefined;
+      let totalUsersForDuration: number | undefined = undefined;
       let rowSpecificWarnings: string[] = [];
 
       const matchedRow = parsedExcelData.find(row => 
         row.metric === values.metric &&
         row.realEstate === values.realEstate &&
-        row.lookbackDays == duration && 
+        row.lookbackDays == duration && // Ensure lookbackDays matches the current duration
         row.mean !== undefined && !isNaN(Number(row.mean)) &&
         row.variance !== undefined && !isNaN(Number(row.variance)) &&
         row.totalUsers !== undefined && !isNaN(Number(row.totalUsers))
@@ -155,13 +155,13 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
         varianceForCalc = Number(matchedRow.variance);
         totalUsersForDuration = Number(matchedRow.totalUsers);
       } else {
-        rowSpecificWarnings.push(`Data not found in uploaded file for ${duration}-day duration.`);
+        rowSpecificWarnings.push(`Data_not_found_in_uploaded_file_for_${duration}-day_duration.`);
       }
       
-      if (typeof meanForCalc === 'number' && typeof varianceForCalc === 'number') {
+      if (meanForCalc !== undefined && varianceForCalc !== undefined) { // Only proceed if mean/variance found
         try {
           const actionInput = {
-            metric: values.metric,
+            metric: values.metric, // Passed for context
             metricType: values.metricType,
             mean: meanForCalc,
             variance: varianceForCalc,
@@ -169,66 +169,59 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
             statisticalPower: values.statisticalPower,
             significanceLevel: values.significanceLevel,
             numberOfVariants: values.numberOfVariants,
-            realEstate: values.realEstate,
+            realEstate: values.realEstate, // Passed for context
             targetExperimentDurationDays: duration,
-            totalUsersInSelectedDuration: typeof totalUsersForDuration === 'number' ? totalUsersForDuration : undefined,
+            totalUsersInSelectedDuration: totalUsersForDuration, // This can be undefined if not found
           };
 
-          const result = await calculateSampleSizeAction(actionInput);
+          // This result is MdeToSampleSizeCalculationResults
+          const result = await calculateSampleSizeAction(actionInput as any); // Cast as any to satisfy MdeToSampleSizeFormValues temporarily
+          
           aggregatedResults.push({
             duration,
-            meanUsed: meanForCalc, 
-            varianceUsed: varianceForCalc, 
-            totalUsersAvailable: totalUsersForDuration,
-            requiredSampleSizePerVariant: result.requiredSampleSizePerVariant, 
+            totalUsersAvailable: totalUsersForDuration, // Use found or undefined
             totalRequiredSampleSize: result.requiredSampleSizePerVariant && values.numberOfVariants ? result.requiredSampleSizePerVariant * values.numberOfVariants : undefined,
             exposureNeededPercentage: result.exposureNeededPercentage,
             warnings: [...rowSpecificWarnings, ...(result.warnings || [])], 
           });
-          if (result.warnings) calculationWarnings.push(...result.warnings.map(w => `${duration}-day: ${w.replace(/_/g, ' ')}`));
+          if (result.warnings) allCalculationWarnings.push(...result.warnings.map(w => `${duration}-day: ${w.replace(/_/g, ' ')}`));
 
         } catch (error) {
           console.error(`Error calculating for duration ${duration}:`, error);
-          const errorMsg = `Calculation error for ${duration}-day: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          const errorMsg = `Calculation_error_for_${duration}-day:_${error instanceof Error ? error.message : 'Unknown_error'}`;
           aggregatedResults.push({
             duration,
-            meanUsed: meanForCalc,
-            varianceUsed: varianceForCalc,
-            totalUsersAvailable: totalUsersForDuration,
-            requiredSampleSizePerVariant: 'Error',
+            totalUsersAvailable: 'Error',
             totalRequiredSampleSize: 'Error',
             exposureNeededPercentage: 'Error',
             warnings: [...rowSpecificWarnings, errorMsg],
           });
-          calculationWarnings.push(errorMsg);
+          allCalculationWarnings.push(errorMsg.replace(/_/g, ' '));
         }
       } else {
          aggregatedResults.push({
             duration,
-            meanUsed: 'N/A',
-            varianceUsed: 'N/A',
             totalUsersAvailable: 'N/A',
-            requiredSampleSizePerVariant: 'N/A',
             totalRequiredSampleSize: 'N/A',
             exposureNeededPercentage: 'N/A',
             warnings: rowSpecificWarnings, 
           });
-          if (rowSpecificWarnings.length > 0) calculationWarnings.push(...rowSpecificWarnings.map(w => `${duration}-day: ${w.replace(/_/g, ' ')}`));
+          if (rowSpecificWarnings.length > 0) allCalculationWarnings.push(...rowSpecificWarnings.map(w => `${duration}-day: ${w.replace(/_/g, ' ')}`));
       }
     }
     onResults(aggregatedResults);
     setIsLoading(false);
     
-    if (calculationWarnings.length > 0) {
-        const uniqueWarnings = Array.from(new Set(calculationWarnings));
+    if (allCalculationWarnings.length > 0) {
+        const uniqueWarnings = Array.from(new Set(allCalculationWarnings));
         const warningSummary = uniqueWarnings.slice(0, 2).join('; ') + (uniqueWarnings.length > 2 ? '...' : '');
         toast({ 
-            title: "Duration Calculation Complete with Notices", 
-            description: `Some calculations had issues or missing data: ${warningSummary}. Full details in the downloaded report.`,
+            title: "Dynamic Duration Calculation Complete with Notices", 
+            description: `Some calculations had issues or missing data. ${warningSummary}. Full details in downloaded report.`,
             duration: 7000,
         });
     } else {
-        toast({ title: "Duration Calculation Complete", description: "Results table updated below." });
+        toast({ title: "Dynamic Duration Calculation Complete", description: "Results table updated below." });
     }
   }
   
@@ -251,7 +244,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     <Card className="w-full shadow-lg">
       <CardHeader className="flex flex-row items-start justify-between">
         <div>
-          <CardTitle className="font-headline text-2xl">Duration Calculator</CardTitle>
+          <CardTitle className="font-headline text-2xl">Dynamic Duration Calculator</CardTitle>
           <CardDescription>
             Predict sample size needed across different durations.
           </CardDescription>
@@ -395,7 +388,7 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
         if (value === 'N/A') return <span className="text-muted-foreground">N/A</span>;
         if (value === 'Error') return <span className="text-destructive font-semibold">Error</span>;
         const parsedNum = parseFloat(value);
-         if (isNaN(parsedNum)) return String(value); 
+         if (isNaN(parsedNum)) return <span className="text-muted-foreground">{String(value)}</span>; 
         value = parsedNum;
     }
     
@@ -410,13 +403,13 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
       }
       return <span className={cn(isLargeNumber && "font-semibold", typeof value === 'number' ? "text-primary" : "text-foreground")}>{value.toLocaleString(undefined, {minimumFractionDigits: isLargeNumber ? 0 : precision, maximumFractionDigits: precision})}</span>;
     }
-    return String(value); 
+    return <span className="text-muted-foreground">{String(value)}</span>; 
   };
 
   return (
     <Card className="mt-8 w-full shadow-lg">
       <CardHeader>
-        <CardTitle className="font-headline text-2xl">Duration Calculator Predictions</CardTitle>
+        <CardTitle className="font-headline text-2xl">Dynamic Duration Calculator Predictions</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -441,8 +434,15 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
             </TableBody>
           </Table>
         </div>
+         {results.some(row => row.warnings && row.warnings.length > 0) && (
+            <div className="mt-4">
+              <h3 className="font-medium text-sm flex items-center text-muted-foreground">
+                <AlertTriangle className="mr-2 h-4 w-4" />
+                Some durations may have notices. Download report for details.
+              </h3>
+            </div>
+        )}
       </CardContent>
     </Card>
   );
 }
-
