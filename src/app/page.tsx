@@ -65,7 +65,7 @@ export default function ABalyticsPage() {
 
       <main className="flex-1 container mx-auto p-4 md:p-8">
         <Tabs defaultValue="mde-to-sample-size" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 md:w-[600px] mb-6 mx-auto md:mx-0">
+          <TabsList className="grid w-full grid-cols-3 md:w-[700px] mb-6 mx-auto md:mx-0">
             <TabsTrigger value="mde-to-sample-size" className="text-sm md:text-base">
               <Calculator className="mr-2 h-4 w-4" /> MDE to Sample Size
             </TabsTrigger>
@@ -73,7 +73,7 @@ export default function ABalyticsPage() {
               <Search className="mr-2 h-4 w-4" /> Sample Size to MDE
             </TabsTrigger>
             <TabsTrigger value="mde-to-duration" className="text-sm md:text-base">
-              <Clock className="mr-2 h-4 w-4" /> MDE to Duration
+              <Clock className="mr-2 h-4 w-4" /> MDE to Sample Size Across Durations
             </TabsTrigger>
           </TabsList>
           
@@ -101,20 +101,10 @@ export default function ABalyticsPage() {
 
           <TabsContent value="mde-to-duration">
             <div className="space-y-6">
-              <Card className="w-full shadow-lg">
-                <CardHeader>
-                  <CardTitle className="font-headline text-2xl">MDE to Duration Predictor</CardTitle>
-                  <CardDescription>
-                    Enter experiment parameters. The calculator will predict sample size and exposure for 7, 14, 21, and 30 day durations using data from your uploaded file.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <MdeDurationPredictorForm 
-                    onResults={handleMdeDurationPredictorResults}
-                    currentResults={mdeDurationPredictorResults}
-                  />
-                </CardContent>
-              </Card>
+              <MdeDurationPredictorForm 
+                onResults={handleMdeDurationPredictorResults}
+                currentResults={mdeDurationPredictorResults}
+              />
               {mdeDurationPredictorResults && <MdeDurationPredictorResultsDisplay results={mdeDurationPredictorResults} />}
             </div>
           </TabsContent>

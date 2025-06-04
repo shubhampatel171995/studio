@@ -159,7 +159,7 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
 }
 
 export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredictorFormValues, results: MdeDurationPredictorResultRow[]) {
-  let reportContent = "ABalytics - MDE to Duration Predictor Report\n\n";
+  let reportContent = "ABalytics - MDE to Sample Size Across Durations Report\n\n";
   reportContent += "Common Inputs:\n";
   reportContent += `- Metric: ${formValues.metric || 'N/A'}\n`;
   reportContent += `- Real Estate: ${formValues.realEstate || 'N/A'}\n`;
@@ -171,7 +171,7 @@ export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredic
   
   reportContent += "Note: Mean, Variance, and Total Users are sourced from the uploaded Excel file for each specific duration.\n\n";
 
-  reportContent += "Duration Predictions:\n";
+  reportContent += "Predictions Across Durations:\n";
   reportContent += "--------------------------------------------------------------------------------------------------------------------\n";
   reportContent += "Duration | Mean Used | Variance Used | Total Users Available | Req. Sample/Variant | Total Req. Sample | Exposure Needed (%) | Notices\n";
   reportContent += "--------------------------------------------------------------------------------------------------------------------\n";
@@ -193,7 +193,7 @@ export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredic
   const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "abalytics_mde_duration_predictor_report.txt";
+  link.download = "abalytics_mde_to_samplesize_across_durations_report.txt";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

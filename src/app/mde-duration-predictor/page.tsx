@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-export default function MdeDurationPredictorPage() {
+export default function MdeSampleSizeAcrossDurationsPage() {
   return (
     <div className="flex flex-col min-h-screen bg-background">
        <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -13,7 +13,7 @@ export default function MdeDurationPredictorPage() {
           <div className="flex items-center">
             <Clock className="h-8 w-8 mr-3 text-primary" />
             <h1 className="text-3xl font-bold font-headline tracking-tight text-foreground">
-              MDE to Duration Predictor
+              MDE to Sample Size Across Durations
             </h1>
           </div>
           <Button asChild variant="outline">
@@ -25,17 +25,25 @@ export default function MdeDurationPredictorPage() {
         </div>
       </header>
       <main className="flex-1 container mx-auto p-4 md:p-8">
+         {/* This Card structure is effectively duplicated from the main page tab now.
+             The MdeDurationPredictorForm manages its own Card if used standalone or on main page.
+             For consistency, if this page were to be actively used, we might want MdeDurationPredictorForm
+             to NOT render its own card, and have the page render it, or adjust MdeDurationPredictorForm
+             to take a prop to control card rendering. For now, it's okay as the primary access is via tabs.
+         */}
         <Card className="w-full max-w-4xl mx-auto shadow-lg">
-          <CardHeader>
-            <CardTitle className="font-headline text-2xl">Experiment Inputs</CardTitle>
-            <CardDescription>
-              Enter your experiment parameters. The calculator will predict sample size and exposure for various durations (7, 14, 21, 30 days).
-              Upload an Excel file via "Upload & Map Data" on the main page to auto-fill historical data for selected metrics and real estate.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <MdeDurationPredictorForm />
-          </CardContent>
+            <CardHeader>
+                <CardTitle className="font-headline text-2xl">Experiment Inputs</CardTitle>
+                <CardDescription>
+                Enter experiment parameters. The calculator will predict sample size and exposure for 7, 14, 21, and 30 day durations using data from your uploaded file.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <MdeDurationPredictorForm 
+                    onResults={() => {}} // Dummy onResults for standalone page
+                    currentResults={null} // Dummy currentResults
+                />
+            </CardContent>
         </Card>
       </main>
       <footer className="py-6 md:px-8 md:py-0 border-t">
@@ -48,3 +56,4 @@ export default function MdeDurationPredictorPage() {
     </div>
   );
 }
+

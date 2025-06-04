@@ -24,7 +24,7 @@ import {
 import { calculateSampleSizeAction } from "@/actions/ab-analytics-actions";
 import { useState, useEffect } from "react";
 import { Loader2, SettingsIcon, AlertTriangle, Download } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -71,8 +71,6 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
   });
 
   const selectedMetric = form.watch("metric");
-  // const selectedRealEstate = form.watch("realEstate");
-  // const selectedMetricType = form.watch("metricType");
 
 
   useEffect(() => {
@@ -232,117 +230,123 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     }
   };
   
-  // Function to clear results when key inputs change
   const clearResultsOnInputChange = () => {
     onResults(null);
   };
 
 
   return (
-    <div className="space-y-6">
-      <FormProvider {...form}>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                <div className="flex justify-end">
-                    <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
-                        <DialogTrigger asChild>
-                             <Button variant="outline" size="icon">
-                                <SettingsIcon className="h-5 w-5" />
-                                <span className="sr-only">Open Statistical Settings</span>
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px]">
-                            <FormProvider {...form}>
-                                <DialogHeader>
-                                    <DialogTitle>Advanced Statistical Settings</DialogTitle>
-                                    <p className="text-xs text-muted-foreground">Adjust statistical power and significance level (alpha).</p>
-                                </DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                    <FormField control={form.control} name="statisticalPower" render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Statistical Power (1 - β)</FormLabel>
-                                        <FormControl><Input type="number" placeholder="e.g., 0.8" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="0.01" min="0.01" max="0.99" /></FormControl>
-                                        <FormDescription className="text-xs">Typically 0.8 (80%).</FormDescription><FormMessage />
-                                    </FormItem>)} />
-                                    <FormField control={form.control} name="significanceLevel" render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Significance Level (α)</FormLabel>
-                                        <FormControl><Input type="number" placeholder="e.g., 0.05" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="0.01" min="0.01" max="0.99" /></FormControl>
-                                        <FormDescription className="text-xs">Typically 0.05 (5%).</FormDescription><FormMessage />
-                                    </FormItem>)} />
-                                </div>
-                                <DialogFooter><DialogClose asChild><Button type="button">Done</Button></DialogClose></DialogFooter>
-                            </FormProvider>
-                        </DialogContent>
-                    </Dialog>
-                </div>
-                
-                <Separator />
-                <p className="text-sm font-medium text-foreground">Experiment Configuration</p>
-                 <p className="text-xs text-muted-foreground -mt-6">
-                    This predictor relies on data uploaded via "Upload & Map Data". Ensure your file contains entries for 7, 14, 21, and 30 day lookback periods for the selected Metric & Real Estate.
-                    {uploadedFileName && <span className="block mt-1">Currently using: <strong>{uploadedFileName}</strong></span>}
-                    {!uploadedFileName && <span className="block mt-1 text-destructive"><strong>No data file uploaded. Please upload data via the main page.</strong></span>}
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <FormField control={form.control} name="metric" render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Metric</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange();}} value={field.value} disabled={!availableMetrics.length || !parsedExcelData}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Select Metric" /></SelectTrigger></FormControl>
-                        <SelectContent>{availableMetrics.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <FormMessage />
-                    </FormItem>)} />
-                <FormField control={form.control} name="realEstate" render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Real Estate</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value} disabled={!selectedMetric || !availableRealEstates.length || !parsedExcelData}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Select Real Estate" /></SelectTrigger></FormControl>
-                        <SelectContent>{availableRealEstates.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <FormMessage />
-                    </FormItem>)} />
-                <FormField control={form.control} name="metricType" render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Metric Type</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger></FormControl>
-                        <SelectContent>{METRIC_TYPE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
-                    </Select>
-                    <FormMessage />
-                    </FormItem>)} />
-                <FormField control={form.control} name="minimumDetectableEffect" render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>MDE (%)</FormLabel>
-                    <FormControl><Input type="number" placeholder="e.g., 0.5" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="any"/></FormControl>
-                    <FormDescription className="text-xs">Minimum change you want to detect.</FormDescription>
-                    <FormMessage />
-                    </FormItem>)} />
-                <FormField control={form.control} name="numberOfVariants" render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Number of Variants</FormLabel>
-                    <FormControl><Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} /></FormControl>
-                    <FormDescription className="text-xs">Incl. control (min 2).</FormDescription>
-                    <FormMessage />
-                    </FormItem>)} />
-                </div>
-                
-                <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <Button type="submit" disabled={isLoading || !parsedExcelData} className="w-full sm:w-auto">
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Predict Durations
+    <Card className="w-full shadow-lg">
+      <CardHeader className="flex flex-row items-start justify-between">
+        <div>
+            <CardTitle className="font-headline text-2xl">MDE to Sample Size Across Durations</CardTitle>
+            <CardDescription>
+                Enter experiment parameters. The calculator will predict sample size and exposure for 7, 14, 21, and 30 day durations using data from your uploaded file.
+            </CardDescription>
+        </div>
+        <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
+            <DialogTrigger asChild>
+                 <Button variant="outline" size="icon">
+                    <SettingsIcon className="h-5 w-5" />
+                    <span className="sr-only">Open Statistical Settings</span>
                 </Button>
-                {currentResults && (
-                    <Button type="button" variant="outline" onClick={handleDownloadReport} className="w-full sm:w-auto" disabled={isLoading}>
-                        <Download className="mr-2 h-4 w-4" /> Download Report
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+                <FormProvider {...form}>
+                    <DialogHeader>
+                        <DialogTitle>Advanced Statistical Settings</DialogTitle>
+                        <p className="text-xs text-muted-foreground">Adjust statistical power and significance level (alpha).</p>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <FormField control={form.control} name="statisticalPower" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Statistical Power (1 - β)</FormLabel>
+                            <FormControl><Input type="number" placeholder="e.g., 0.8" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="0.01" min="0.01" max="0.99" /></FormControl>
+                            <FormDescription className="text-xs">Typically 0.8 (80%).</FormDescription><FormMessage />
+                        </FormItem>)} />
+                        <FormField control={form.control} name="significanceLevel" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Significance Level (α)</FormLabel>
+                            <FormControl><Input type="number" placeholder="e.g., 0.05" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="0.01" min="0.01" max="0.99" /></FormControl>
+                            <FormDescription className="text-xs">Typically 0.05 (5%).</FormDescription><FormMessage />
+                        </FormItem>)} />
+                    </div>
+                    <DialogFooter><DialogClose asChild><Button type="button">Done</Button></DialogClose></DialogFooter>
+                </FormProvider>
+            </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        <FormProvider {...form}>
+            <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                    <Separator />
+                    <p className="text-sm font-medium text-foreground">Experiment Configuration</p>
+                    <p className="text-xs text-muted-foreground -mt-6">
+                        This predictor relies on data uploaded via "Upload & Map Data". Ensure your file contains entries for 7, 14, 21, and 30 day lookback periods for the selected Metric & Real Estate.
+                        {uploadedFileName && <span className="block mt-1">Currently using: <strong>{uploadedFileName}</strong></span>}
+                        {!uploadedFileName && <span className="block mt-1 text-destructive"><strong>No data file uploaded. Please upload data via the main page.</strong></span>}
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <FormField control={form.control} name="metric" render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Metric</FormLabel>
+                        <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange();}} value={field.value} disabled={!availableMetrics.length || !parsedExcelData}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Select Metric" /></SelectTrigger></FormControl>
+                            <SelectContent>{availableMetrics.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <FormMessage />
+                        </FormItem>)} />
+                    <FormField control={form.control} name="realEstate" render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Real Estate</FormLabel>
+                        <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value} disabled={!selectedMetric || !availableRealEstates.length || !parsedExcelData}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Select Real Estate" /></SelectTrigger></FormControl>
+                            <SelectContent>{availableRealEstates.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <FormMessage />
+                        </FormItem>)} />
+                    <FormField control={form.control} name="metricType" render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Metric Type</FormLabel>
+                        <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger></FormControl>
+                            <SelectContent>{METRIC_TYPE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <FormMessage />
+                        </FormItem>)} />
+                    <FormField control={form.control} name="minimumDetectableEffect" render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>MDE (%)</FormLabel>
+                        <FormControl><Input type="number" placeholder="e.g., 0.5" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="any"/></FormControl>
+                        <FormDescription className="text-xs">Minimum change you want to detect.</FormDescription>
+                        <FormMessage />
+                        </FormItem>)} />
+                    <FormField control={form.control} name="numberOfVariants" render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Number of Variants</FormLabel>
+                        <FormControl><Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} /></FormControl>
+                        <FormDescription className="text-xs">Incl. control (min 2).</FormDescription>
+                        <FormMessage />
+                        </FormItem>)} />
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                    <Button type="submit" disabled={isLoading || !parsedExcelData} className="w-full sm:w-auto">
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Predict Durations
                     </Button>
-                )}
-                </div>
-            </form>
-        </Form>
-      </FormProvider>
-    </div>
+                    {currentResults && (
+                        <Button type="button" variant="outline" onClick={handleDownloadReport} className="w-full sm:w-auto" disabled={isLoading}>
+                            <Download className="mr-2 h-4 w-4" /> Download Report
+                        </Button>
+                    )}
+                    </div>
+                </form>
+            </Form>
+        </FormProvider>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -360,7 +364,7 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
       return <span className="text-muted-foreground">N/A</span>;
     }
     if (value === 'Error') {
-      return <span className="text-destructive">Error</span>;
+      return <span className="text-destructive font-semibold">Error</span>;
     }
      if (value === 'N/A') {
       return <span className="text-muted-foreground">N/A</span>;
@@ -368,11 +372,11 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
 
     if (typeof value === 'number') {
       if (isPercentage) {
-        if (value === Infinity) return '∞%';
-        if (value > 1000) return '>1000%';
-        return `${value.toFixed(precision)}%`;
+        if (value === Infinity) return <span className="text-primary font-semibold">∞%</span>;
+        if (value > 1000) return <span className="text-primary font-semibold">&gt;1000%</span>;
+        return <span className="text-primary font-semibold">{value.toFixed(precision)}%</span>;
       }
-      return value.toLocaleString(undefined, {minimumFractionDigits: precision, maximumFractionDigits: precision});
+      return value.toLocaleString(undefined, {minimumFractionDigits: isLargeNumber ? 0 : precision, maximumFractionDigits: precision});
     }
     return String(value); // Should not happen if types are correct
   };
@@ -381,7 +385,7 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
   return (
     <Card className="mt-8 w-full shadow-lg">
       <CardHeader>
-        <CardTitle className="font-headline text-2xl">Duration Predictions</CardTitle>
+        <CardTitle className="font-headline text-2xl">Sample Size Predictions Across Durations</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -406,18 +410,16 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
                   <TableCell>{formatCell(row.varianceUsed, false, false, 6)}</TableCell>
                   <TableCell>{formatCell(row.totalUsersAvailable, false, true)}</TableCell>
                   <TableCell 
-                    className={cn(typeof row.requiredSampleSizePerVariant === 'number' ? "text-primary font-semibold" : "text-muted-foreground")}
+                    className={cn(typeof row.requiredSampleSizePerVariant === 'number' ? "text-primary font-semibold" : (row.requiredSampleSizePerVariant === 'Error' ? "text-destructive font-semibold" : "text-muted-foreground"))}
                   >
                     {formatCell(row.requiredSampleSizePerVariant, false, true)}
                   </TableCell>
                   <TableCell 
-                     className={cn(typeof row.totalRequiredSampleSize === 'number' ? "text-primary font-semibold" : "text-muted-foreground")}
+                     className={cn(typeof row.totalRequiredSampleSize === 'number' ? "text-primary font-semibold" : (row.totalRequiredSampleSize === 'Error' ? "text-destructive font-semibold" : "text-muted-foreground"))}
                   >
                     {formatCell(row.totalRequiredSampleSize, false, true)}
                   </TableCell>
-                  <TableCell 
-                     className={cn(typeof row.exposureNeededPercentage === 'number' ? "text-primary font-semibold" : "text-muted-foreground")}
-                  >
+                  <TableCell>
                     {formatCell(row.exposureNeededPercentage, true)}
                   </TableCell>
                   <TableCell>
