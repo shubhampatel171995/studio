@@ -1,0 +1,21 @@
+// Z-scores for confidence levels (alpha, two-tailed)
+export const Z_ALPHA_DIV_2: Record<string, number> = {
+  "0.01": 2.576, // 99% confidence
+  "0.05": 1.96,  // 95% confidence
+  "0.10": 1.645, // 90% confidence
+};
+
+// Z-scores for statistical power (1 - beta)
+export const Z_BETA: Record<string, number> = {
+  "0.80": 0.84,  // 80% power
+  "0.90": 1.28,  // 90% power
+  "0.95": 1.645, // 95% power
+};
+
+export const DEFAULT_LOOKBACK_DAYS = 30;
+export const DEFAULT_MDE_PERCENT = 2;
+export const DEFAULT_STATISTICAL_POWER = 0.8;
+export const DEFAULT_SIGNIFICANCE_LEVEL = 0.05;
+
+export const REAL_ESTATE_OPTIONS = ["Home Page", "Product Detail Page (PDP)", "Cart", "Checkout", "Search Results"];
+export const METRIC_OPTIONS = ["Conversion Rate (Orders/Visitors)", "Average Order Value (AOV)", "Click-Through Rate (CTR)", "Add to Cart Rate"];
