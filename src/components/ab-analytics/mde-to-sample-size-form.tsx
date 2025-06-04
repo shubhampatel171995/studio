@@ -22,7 +22,7 @@ import {
   type ExcelDataRow,
 } from "@/lib/types";
 import { calculateSampleSizeAction } from "@/actions/ab-analytics-actions";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Loader2, AlertTriangle, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -46,7 +46,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
   const [availableMetrics, setAvailableMetrics] = useState<string[]>(DEFAULT_METRIC_OPTIONS);
   const [availableRealEstates, setAvailableRealEstates] = useState<string[]>(DEFAULT_REAL_ESTATE_OPTIONS);
   const [availableLookbackDays, setAvailableLookbackDays] = useState<number[]>([]);
-  const [isDataFromExcel, setIsDataFromExcel] = useState(false); // Tracks if current mean/variance/users are from excel
+  const [isDataFromExcel, setIsDataFromExcel] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<MdeToSampleSizeFormValues>({
@@ -67,6 +67,12 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
   const selectedMetric = form.watch("metric");
   const selectedRealEstate = form.watch("realEstate");
   const currentLookbackDays = form.watch("lookbackDays");
+
+  // Refs to store previous selector values to detect user-driven changes
+  const prevSelectedMetricRef = useRef<string | undefined>();
+  const prevSelectedRealEstateRef = useRef<string | undefined>();
+  const prevLookbackDaysRef = useRef<number | undefined>();
+
 
   useEffect(() => {
     const storedData = localStorage.getItem('abalyticsMappedData');
@@ -111,7 +117,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
         if (!uniqueRealEstates.includes(currentFormRealEstate)) {
           form.setValue("realEstate", uniqueRealEstates[0]);
         }
-      } else if (DEFAULT_REAL_ESTATE_OPTIONS.length > 0) {
+      } else if (DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !parsedExcelData.length) { // only reset if not using file
           form.setValue("realEstate", DEFAULT_REAL_ESTATE_OPTIONS[0]);
       }
     } else if (!parsedExcelData) {
@@ -140,24 +146,37 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
           form.setValue("lookbackDays", uniqueLookbacks[0], { shouldValidate: true });
         }
       } else {
-        form.setValue("lookbackDays", DEFAULT_LOOKBACK_DAYS);
-        form.setValue("mean", NaN);
-        form.setValue("variance", NaN);
-        form.setValue("numberOfUsers", NaN);
-        setIsDataFromExcel(false);
-        onResults(null);
-        if (parsedExcelData.length > 0) {
-          toast({ title: "No lookback periods found", description: `No lookback data in the file for ${selectedMetric} on ${selectedRealEstate}. Input manually or check selections/file.`, variant: "default"});
+        // If no specific lookbacks for this combo, but we have excel data, don't default to DEFAULT_LOOKBACK_DAYS
+        // Instead, signal that manual input is needed or selection is incomplete.
+        if(parsedExcelData.length > 0) { // Only if excel data is loaded
+            form.setValue("lookbackDays", NaN); // Or some indicator for 'select lookback'
+            form.setValue("mean", NaN);
+            form.setValue("variance", NaN);
+            form.setValue("numberOfUsers", NaN);
+            setIsDataFromExcel(false); // Data isn't fully from Excel for this combo yet
+            // onResults(null); // Clearing results here might be too aggressive
+            if (parsedExcelData.length > 0) {
+              // Toast only if user was expecting data for this combo.
+              // This toast might be too frequent, consider if it should be shown only if a lookback was previously selected for this combo.
+            }
+        } else {
+           form.setValue("lookbackDays", DEFAULT_LOOKBACK_DAYS); // Fallback if no excel data at all
         }
       }
     } else if (!parsedExcelData) {
         setAvailableLookbackDays([]);
         setIsDataFromExcel(false);
+        form.setValue("lookbackDays", DEFAULT_LOOKBACK_DAYS); // Fallback if no excel data
     }
-  }, [parsedExcelData, selectedMetric, selectedRealEstate, form, toast, onResults]);
+  }, [parsedExcelData, selectedMetric, selectedRealEstate, form]);
 
 
   useEffect(() => {
+    const userActuallyChangedMetric = prevSelectedMetricRef.current !== selectedMetric && prevSelectedMetricRef.current !== undefined;
+    const userActuallyChangedRealEstate = prevSelectedRealEstateRef.current !== selectedRealEstate && prevSelectedRealEstateRef.current !== undefined;
+    const userActuallyChangedLookback = prevLookbackDaysRef.current !== currentLookbackDays && prevLookbackDaysRef.current !== undefined;
+    const isUserDrivenSelectorChange = userActuallyChangedMetric || userActuallyChangedRealEstate || userActuallyChangedLookback;
+
     if (parsedExcelData && selectedMetric && selectedRealEstate && !isNaN(currentLookbackDays)) {
       const matchedRow = parsedExcelData.find(row => 
         row.metric === selectedMetric &&
@@ -170,31 +189,65 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
         const varianceVal = parseFloat(String(matchedRow.variance));
         const usersVal = parseInt(String(matchedRow.totalUsers), 10);
 
-        form.setValue("mean", isNaN(meanVal) ? NaN : meanVal, { shouldValidate: true });
-        form.setValue("variance", isNaN(varianceVal) ? NaN : varianceVal, { shouldValidate: true });
-        form.setValue("numberOfUsers", isNaN(usersVal) ? NaN : usersVal, { shouldValidate: true });
-        setIsDataFromExcel(true);
-        onResults(null); 
-        toast({ title: "Data auto-filled from file", description: `Values for ${selectedMetric} on ${selectedRealEstate} for ${currentLookbackDays} days lookback applied.`, variant: "default" });
-      } else {
-        form.setValue("mean", NaN);
-        form.setValue("variance", NaN);
-        form.setValue("numberOfUsers", NaN);
-        setIsDataFromExcel(false);
-        onResults(null);
-        if (availableLookbackDays.includes(currentLookbackDays)) { 
-            toast({ title: "No matching data in file", description: `No row found for ${selectedMetric} on ${selectedRealEstate} with ${currentLookbackDays} days lookback. Input manually or check selections.`, variant: "default" });
+        const currentFormMean = form.getValues("mean");
+        const currentFormVariance = form.getValues("variance");
+        const currentFormUsers = form.getValues("numberOfUsers");
+        let valuesActuallyChangedByAutofill = false;
+
+        if (currentFormMean !== meanVal && !(isNaN(currentFormMean) && isNaN(meanVal))) {
+            form.setValue("mean", isNaN(meanVal) ? NaN : meanVal, { shouldValidate: true });
+            valuesActuallyChangedByAutofill = true;
         }
-      }
-    } else if (!parsedExcelData) {
-        if(isDataFromExcel) { 
+        if (currentFormVariance !== varianceVal && !(isNaN(currentFormVariance) && isNaN(varianceVal))) {
+            form.setValue("variance", isNaN(varianceVal) ? NaN : varianceVal, { shouldValidate: true });
+            valuesActuallyChangedByAutofill = true;
+        }
+        if (currentFormUsers !== usersVal && !(isNaN(currentFormUsers) && isNaN(usersVal))) {
+            form.setValue("numberOfUsers", isNaN(usersVal) ? NaN : usersVal, { shouldValidate: true });
+            valuesActuallyChangedByAutofill = true;
+        }
+        
+        setIsDataFromExcel(true);
+        if (isUserDrivenSelectorChange) {
+            onResults(null); 
+            if (valuesActuallyChangedByAutofill) {
+                toast({ title: "Data auto-filled from file", description: `Values for ${selectedMetric} on ${selectedRealEstate} for ${currentLookbackDays} days lookback applied.`, variant: "default" });
+            }
+        }
+      } else {
+        // If a specific lookback was selected for which no data exists, clear related fields if they were from excel
+        if(isDataFromExcel){ // only clear if data was previously from excel for a *different valid* lookback
             form.setValue("mean", NaN);
             form.setValue("variance", NaN);
             form.setValue("numberOfUsers", NaN);
         }
-        setIsDataFromExcel(false);
+        setIsDataFromExcel(false); 
+        if (isUserDrivenSelectorChange) {
+            onResults(null);
+            if (parsedExcelData.length > 0 && availableLookbackDays.includes(currentLookbackDays)) { 
+                toast({ title: "No matching data in file", description: `No specific data row found for ${selectedMetric} on ${selectedRealEstate} with ${currentLookbackDays} days lookback. Input manually or check selections.`, variant: "default" });
+            }
+        }
+      }
+    } else if (!parsedExcelData) {
+        // If excel data is removed entirely (e.g. cleared by user action not yet implemented)
+        if(isDataFromExcel) { 
+            form.setValue("mean", NaN);
+            form.setValue("variance", NaN);
+            form.setValue("numberOfUsers", NaN);
+            setIsDataFromExcel(false);
+            if (isUserDrivenSelectorChange) { // Or if any selector changed and now there's no excel data
+                 onResults(null);
+            }
+        }
     }
-  }, [parsedExcelData, selectedMetric, selectedRealEstate, currentLookbackDays, form, toast, onResults, availableLookbackDays, isDataFromExcel]);
+    
+    // Update refs for next comparison
+    prevSelectedMetricRef.current = selectedMetric;
+    prevSelectedRealEstateRef.current = selectedRealEstate;
+    prevLookbackDaysRef.current = currentLookbackDays;
+
+  }, [parsedExcelData, selectedMetric, selectedRealEstate, currentLookbackDays, form, toast, onResults, availableLookbackDays, isDataFromExcel, setIsDataFromExcel]);
 
 
   async function onSubmit(values: MdeToSampleSizeFormValues) {
@@ -212,7 +265,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       } else if (result.warnings && result.warnings.length > 0) {
         toast({
             title: "Calculation Notice",
-            description: result.warnings.join(' ') || "Could not fully determine sample size. See notices for details.",
+            description: result.warnings.join(' ').replace(/_/g, ' ') || "Could not fully determine sample size. See notices for details.",
             variant: "default",
         });
       }
@@ -237,14 +290,15 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
     }
   }
   
-  const isHistoricalDataReadOnly = !!parsedExcelData && isDataFromExcel;
+  const isHistoricalDataReadOnly = !!parsedExcelData && isDataFromExcel && !isNaN(currentLookbackDays) && availableLookbackDays.includes(currentLookbackDays);
+
 
   return (
     <Card className="w-full shadow-lg">
       <CardHeader>
         <CardTitle className="font-headline text-2xl">MDE to Sample Size Inputs</CardTitle>
         <p className="text-muted-foreground">
-          {parsedExcelData 
+          {uploadedFileName 
             ? `Using data from "${uploadedFileName}". Select Metric, Real Estate & Lookback to auto-fill historical data, or input MDE.`
             : 'Enter historical data and desired MDE. Or, upload a data file via the "Upload & Map Data" page.'
           }
@@ -268,10 +322,6 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                     <Select 
                         onValueChange={(value) => { 
                             field.onChange(value); 
-                            onResults(null); 
-                            setIsDataFromExcel(false); 
-                            setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS); // Reset dependent dropdowns
-                            setAvailableLookbackDays([]);
                         }} 
                         value={field.value}
                         disabled={!availableMetrics.length}
@@ -297,9 +347,6 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                     <Select 
                         onValueChange={(value) => { 
                             field.onChange(value); 
-                            onResults(null); 
-                            setIsDataFromExcel(false);
-                            setAvailableLookbackDays([]);
                         }} 
                         value={field.value}
                         disabled={!selectedMetric || !availableRealEstates.length}
@@ -325,9 +372,8 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                          <Select
                             onValueChange={(value) => {
                                 field.onChange(parseInt(value, 10));
-                                onResults(null);
                             }}
-                            value={String(field.value)}
+                            value={isNaN(field.value) ? '' : String(field.value)}
                             disabled={!selectedRealEstate || availableLookbackDays.length === 0}
                          >
                             <FormControl>
@@ -353,8 +399,6 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                           onChange={(e) => {
                             const val = parseInt(e.target.value, 10);
                             field.onChange(isNaN(val) ? NaN : val); 
-                            onResults(null); 
-                            if (parsedExcelData) setIsDataFromExcel(false);
                           }} 
                           readOnly={isHistoricalDataReadOnly && availableLookbackDays.length > 0} 
                         />
@@ -363,7 +407,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                      <FormDescription>
                         {isHistoricalDataReadOnly 
                             ? "Selected from file. Used to calculate daily traffic." 
-                            : "Used to calculate daily traffic from Total Users."}
+                            : (parsedExcelData && availableLookbackDays.length === 0 && selectedMetric && selectedRealEstate ? "No lookback options for this Metric/Real Estate in file. Input manually." :"Used to calculate daily traffic from Total Users.")}
                      </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -374,7 +418,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             <Separator />
             <p className="text-sm text-muted-foreground">
               {parsedExcelData ? 
-                (isDataFromExcel ? 'Historical data below is auto-filled from your file and is read-only.' : (uploadedFileName ? 'Select Metric, Real Estate, and Lookback Period to auto-fill, or input manually if no match.' : 'Upload a file or input manually.')) :
+                (isHistoricalDataReadOnly ? 'Historical data below is auto-filled from your file and is read-only.' : (uploadedFileName && selectedMetric && selectedRealEstate && (isNaN(currentLookbackDays) || !availableLookbackDays.includes(currentLookbackDays))) ? 'Select a valid Lookback Period to auto-fill, or input manually if no suitable data.' : 'Input MDE and historical data. Select Metric, Real Estate, and Lookback to auto-fill Mean, Variance, Users.') :
                 'Enter historical data and desired MDE below.'
               }
             </p>
