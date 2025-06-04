@@ -19,6 +19,7 @@ export function downloadMdeToSampleSizeReport(results: MdeToSampleSizeCalculatio
   reportContent += `- Target MDE: ${formatNumber(results.minimumDetectableEffect ? results.minimumDetectableEffect * 100 : null, 2, '%')}\n`;
   reportContent += `- Mean (Historical, for selected lookback/duration): ${formatNumber(results.mean, 4)}\n`;
   reportContent += `- Variance (Historical, for selected lookback/duration): ${formatNumber(results.variance, 6)}\n`;
+  reportContent += `- Number of Variants: ${formatNumber(results.numberOfVariants, 0)}\n`;
   
   let trafficSourceNote = "(manual input or no file match for target duration)";
   if (results.realEstate && results.metric && results.lookbackDays === results.targetExperimentDurationDays && results.totalUsersInSelectedDuration !== undefined) {
@@ -34,14 +35,18 @@ export function downloadMdeToSampleSizeReport(results: MdeToSampleSizeCalculatio
   reportContent += `- Significance Level (Alpha): ${formatNumber(results.significanceLevel ? results.significanceLevel * 100 : null, 0, '%')}\n\n`;
   
   reportContent += "Core Results:\n";
-  reportContent += `- Required Sample Size (per variant): ${formatNumber(results.requiredSampleSize)}\n`;
+  reportContent += `- Required Sample Size (per variant): ${formatNumber(results.requiredSampleSizePerVariant)}\n`;
+  if (results.requiredSampleSizePerVariant && results.numberOfVariants) {
+    reportContent += `- Total Required Sample Size (${results.numberOfVariants} variants): ${formatNumber(results.requiredSampleSizePerVariant * results.numberOfVariants)}\n`;
+  }
+
   if (results.exposureNeededPercentage !== undefined) {
       const displayExposure = results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? formatNumber(results.exposureNeededPercentage,1,'%') : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A';
-      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): ${displayExposure}\n`;
+      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days, ${results.numberOfVariants} variants): ${displayExposure}\n`;
   } else if (results.totalUsersInSelectedDuration && results.totalUsersInSelectedDuration > 0) {
-      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): N/A (Likely due to high sample size or low traffic for duration)\n`;
+      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days, ${results.numberOfVariants} variants): N/A (Likely due to high sample size or low traffic for duration)\n`;
   } else {
-      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): N/A (Missing total users data for the duration)\n`;
+      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days, ${results.numberOfVariants} variants): N/A (Missing total users data for the duration)\n`;
   }
   reportContent += `- Confidence Level: ${formatNumber(results.confidenceLevel ? results.confidenceLevel * 100 : null, 0, '%')}\n\n`;
 
@@ -106,6 +111,7 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
   reportContent += `- Target MDE: ${formatNumber(results.minimumDetectableEffect ? results.minimumDetectableEffect * 100 : null, 2, '%')}\n`;
   reportContent += `- Mean (Baseline): ${formatNumber(results.mean, 4)}\n`;
   reportContent += `- Variance: ${formatNumber(results.variance, 6)}\n`; 
+  reportContent += `- Number of Variants: ${formatNumber(results.numberOfVariants, 0)}\n`;
   reportContent += `- Historical Daily Traffic: ${formatNumber(results.historicalDailyTraffic, 0)}\n`;
   if (results.targetExperimentDurationDays !== undefined) {
     reportContent += `- Target Experiment Duration: ${formatNumber(results.targetExperimentDurationDays, 0)} days\n`;
@@ -114,14 +120,17 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
   reportContent += `- Significance Level (Alpha): ${formatNumber(results.significanceLevel ? results.significanceLevel * 100 : null, 0, '%')}\n\n`;
   
   reportContent += "Core Results:\n";
-  reportContent += `- Required Sample Size (per variant): ${formatNumber(results.requiredSampleSize)}\n`;
+  reportContent += `- Required Sample Size (per variant): ${formatNumber(results.requiredSampleSizePerVariant)}\n`;
+  if (results.requiredSampleSizePerVariant && results.numberOfVariants) {
+    reportContent += `- Total Required Sample Size (${results.numberOfVariants} variants): ${formatNumber(results.requiredSampleSizePerVariant * results.numberOfVariants)}\n`;
+  }
    if (results.exposureNeededPercentage !== undefined) {
       const displayExposure = results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? formatNumber(results.exposureNeededPercentage,1,'%') : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A';
-      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): ${displayExposure}\n`;
+      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days, ${results.numberOfVariants} variants): ${displayExposure}\n`;
   } else if (results.historicalDailyTraffic && results.historicalDailyTraffic > 0) {
-      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): N/A (Likely high sample size/low traffic)\n`;
+      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days, ${results.numberOfVariants} variants): N/A (Likely high sample size/low traffic)\n`;
   } else {
-      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): N/A (Missing daily traffic data)\n`;
+      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days, ${results.numberOfVariants} variants): N/A (Missing daily traffic data)\n`;
   }
   reportContent += `- Confidence Level: ${formatNumber(results.confidenceLevel ? results.confidenceLevel * 100 : null, 0, '%')}\n\n`;
 

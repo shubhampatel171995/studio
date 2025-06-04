@@ -23,7 +23,7 @@ import {
 } from "@/lib/types";
 import { calculateSampleSizeAction } from "@/actions/ab-analytics-actions";
 import { useState, useEffect, useRef } from "react";
-import { Loader2, AlertTriangle, Download, Info } from "lucide-react";
+import { Loader2, AlertTriangle, Download, Info, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
@@ -44,7 +44,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
   const [availableMetrics, setAvailableMetrics] = useState<string[]>(DEFAULT_METRIC_OPTIONS);
   const [availableRealEstates, setAvailableRealEstates] = useState<string[]>(DEFAULT_REAL_ESTATE_OPTIONS);
   const [isDataFromExcel, setIsDataFromExcel] = useState(false); 
-  const [autoFilledTotalUsersForPeriod, setAutoFilledTotalUsersForPeriod] = useState<number | null>(null);
+  const [autoFilledTotalUsers, setAutoFilledTotalUsers] = useState<number | null>(null);
   const { toast } = useToast();
 
   const form = useForm<MdeToSampleSizeFormValues>({
@@ -58,9 +58,10 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       minimumDetectableEffect: DEFAULT_MDE_PERCENT,
       statisticalPower: DEFAULT_STATISTICAL_POWER,
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
-      totalUsersInSelectedDuration: NaN, 
       targetExperimentDurationDays: 14,
+      totalUsersInSelectedDuration: NaN,
       lookbackDays: 14, 
+      numberOfVariants: 2,
     },
   });
 
@@ -163,11 +164,11 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
         }
         if (!isNaN(totalUsersVal) && form.getValues("totalUsersInSelectedDuration") !== totalUsersVal) {
             form.setValue("totalUsersInSelectedDuration", totalUsersVal, {shouldValidate: true});
-            setAutoFilledTotalUsersForPeriod(totalUsersVal);
-            valuesActuallyChangedByAutofill = true;
+            setAutoFilledTotalUsers(totalUsersVal);
+             valuesActuallyChangedByAutofill = true;
         } else if (isNaN(totalUsersVal)) {
             form.setValue("totalUsersInSelectedDuration", NaN);
-            setAutoFilledTotalUsersForPeriod(null);
+            setAutoFilledTotalUsers(null);
         }
         form.setValue("lookbackDays", matchedRow.lookbackDays || targetExperimentDuration, { shouldValidate: true }); 
         
@@ -181,7 +182,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             form.setValue("mean", NaN);
             form.setValue("variance", NaN);
             form.setValue("totalUsersInSelectedDuration", NaN);
-            setAutoFilledTotalUsersForPeriod(null);
+            setAutoFilledTotalUsers(null);
             form.setValue("lookbackDays", targetExperimentDuration); 
             setIsDataFromExcel(false); 
         }
@@ -195,7 +196,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             form.setValue("mean", NaN);
             form.setValue("variance", NaN);
             form.setValue("totalUsersInSelectedDuration", NaN);
-            setAutoFilledTotalUsersForPeriod(null);
+            setAutoFilledTotalUsers(null);
             setIsDataFromExcel(false);
             onResults(null);
         }
@@ -225,10 +226,10 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       const result = await calculateSampleSizeAction(values);
       onResults(result);
 
-      if (result.requiredSampleSize !== undefined && result.requiredSampleSize > 0) {
+      if (result.requiredSampleSizePerVariant !== undefined && result.requiredSampleSizePerVariant > 0) {
         toast({
             title: "Calculation Complete",
-            description: "Required sample size and exposure calculated.",
+            description: "Required sample size per variant and exposure calculated.",
         });
       } else if (result.warnings && result.warnings.length > 0) {
         toast({
@@ -271,9 +272,10 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             : 'Enter parameters manually or upload a data file via the "Upload & Map Data" page for auto-fill options.'
           }
         </p>
-         {uploadedFileName && parsedExcelData && (
-            <div className="text-sm text-muted-foreground pt-2">
-                Using data from: <span className="font-medium text-primary">{uploadedFileName}</span>
+         {uploadedFileName && parsedExcelData && isDataFromExcel && autoFilledTotalUsers !== null && (
+            <div className="mt-2 p-3 bg-accent/10 rounded-md text-sm text-accent flex items-center gap-2">
+                <Info className="h-5 w-5" />
+                Using data from your file for {targetExperimentDuration} days lookback. Total users for this period: {autoFilledTotalUsers.toLocaleString()}. Mean, Variance, and Total Users for Duration also auto-filled.
             </div>
         )}
       </CardHeader>
@@ -349,18 +351,13 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             <Separator />
             <p className="text-sm text-muted-foreground">
               {isHistoricalFieldReadOnly 
-                ? 'Historical data auto-filled from your file based on Target Duration. Input MDE.' 
+                ? 'Historical data auto-filled from your file based on Target Duration. Input MDE and Number of Variants.' 
                 : (uploadedFileName && (!selectedMetric || !selectedRealEstate || targetExperimentDuration === undefined || isNaN(targetExperimentDuration))) 
                     ? 'Select Metric, Real Estate, and set Target Duration to auto-fill historical data, or input all parameters manually.' 
                     : 'Input all parameters manually.'
               }
             </p>
-            {isHistoricalFieldReadOnly && autoFilledTotalUsersForPeriod !== null && (
-                <div className="p-3 bg-accent/10 rounded-md text-sm text-accent flex items-center gap-2">
-                    <Info className="h-5 w-5" />
-                    Using data from your file for {targetExperimentDuration} days lookback. Total users for this period: {autoFilledTotalUsersForPeriod.toLocaleString()}. Mean, Variance, and Total Users for Duration also auto-filled.
-                </div>
-            )}
+            
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                <FormField
@@ -391,6 +388,20 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   </FormItem>
                 )}
               />
+               <FormField
+                control={form.control}
+                name="numberOfVariants"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Number of Variants</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} />
+                    </FormControl>
+                    <FormDescription className="text-xs">Total variants including control (min 2).</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="mean"
@@ -398,10 +409,10 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Mean (Historical)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder={selectedMetricType === 'Binary' ? "e.g., 0.1 for 10%" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) setIsDataFromExcel(false); setAutoFilledTotalUsersForPeriod(null);}} step="any" readOnly={isHistoricalFieldReadOnly} />
+                      <Input type="number" placeholder={selectedMetricType === 'Binary' ? "e.g., 0.1 for 10%" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) setIsDataFromExcel(false); setAutoFilledTotalUsers(null);}} step="any" readOnly={isHistoricalFieldReadOnly} />
                     </FormControl>
-                    {isHistoricalFieldReadOnly && <FormDescription className="text-xs text-primary">Value from file for {targetExperimentDuration}-day lookback</FormDescription>}
-                    {!isHistoricalFieldReadOnly && <FormDescription className="text-xs">{selectedMetricType === 'Binary' ? "Proportion (0-1)." : "Average value."}</FormDescription>}
+                    {isHistoricalFieldReadOnly ? <FormDescription className="text-xs text-primary">Value from file for {targetExperimentDuration}-day lookback</FormDescription> :
+                    <FormDescription className="text-xs">{selectedMetricType === 'Binary' ? "Proportion (0-1)." : "Average value."}</FormDescription>}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -413,10 +424,11 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Variance (Historical)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 0.1275" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) setIsDataFromExcel(false); setAutoFilledTotalUsersForPeriod(null);}} step="any" readOnly={isHistoricalFieldReadOnly || isVarianceReadOnlyForBinary} />
+                      <Input type="number" placeholder="e.g., 0.1275" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) setIsDataFromExcel(false); setAutoFilledTotalUsers(null);}} step="any" readOnly={isHistoricalFieldReadOnly || isVarianceReadOnlyForBinary} />
                     </FormControl>
-                    {(isHistoricalFieldReadOnly ) && <FormDescription className="text-xs text-primary">Value from file for {targetExperimentDuration}-day lookback</FormDescription>}
-                    {(isVarianceReadOnlyForBinary && !isHistoricalFieldReadOnly) && <FormDescription className="text-xs text-primary">Auto-calculated (p*(1-p))</FormDescription>}
+                    {(isHistoricalFieldReadOnly ) ? <FormDescription className="text-xs text-primary">Value from file for {targetExperimentDuration}-day lookback</FormDescription> :
+                    (isVarianceReadOnlyForBinary) ? <FormDescription className="text-xs text-primary">Auto-calculated (p*(1-p))</FormDescription> :
+                    <FormDescription className="text-xs">Enter metric variance.</FormDescription>}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -433,13 +445,13 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                             placeholder="e.g., 70000" 
                             {...field} 
                             value={isNaN(field.value ?? NaN) ? '' : field.value}
-                            onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) setIsDataFromExcel(false); setAutoFilledTotalUsersForPeriod(null);}}
+                            onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) setIsDataFromExcel(false); setAutoFilledTotalUsers(null);}}
                             readOnly={isHistoricalFieldReadOnly} 
                         />
                         </FormControl>
                         {isHistoricalFieldReadOnly ? 
-                            <FormDescription className="text-xs text-primary">Value from file for the {targetExperimentDuration}-day lookback period.</FormDescription> :
-                            <FormDescription className="text-xs">Enter total unique users for your target experiment duration. If using file, ensure Metric, Real Estate, and Target Duration match a row.</FormDescription>
+                            <FormDescription className="text-xs text-primary">Value from file for the {targetExperimentDuration}-day duration.</FormDescription> :
+                            <FormDescription className="text-xs">Enter total unique users for your target experiment duration.</FormDescription>
                         }
                         <FormMessage />
                     </FormItem>
@@ -486,7 +498,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Calculate Sample Size
               </Button>
-              {currentResults && (currentResults.requiredSampleSize !== undefined || (currentResults.warnings && currentResults.warnings.length > 0)) && (
+              {currentResults && (currentResults.requiredSampleSizePerVariant !== undefined || (currentResults.warnings && currentResults.warnings.length > 0)) && (
                  <Button type="button" variant="outline" onClick={() => currentResults && onDownload(currentResults)} className="w-full sm:w-auto">
                     <Download className="mr-2 h-4 w-4" /> Download Report
                  </Button>
@@ -504,13 +516,14 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
     return null;
   }
   
-  const shouldShowCard = results.requiredSampleSize !== undefined || (results.warnings && results.warnings.length > 0);
+  const shouldShowCard = results.requiredSampleSizePerVariant !== undefined || (results.warnings && results.warnings.length > 0);
 
   if (!shouldShowCard) {
      return null; 
   }
 
   const totalUsersForDisplay = results.totalUsersInSelectedDuration && results.totalUsersInSelectedDuration > 0 ? results.totalUsersInSelectedDuration : 0;
+  const totalRequiredSampleSize = results.requiredSampleSizePerVariant && results.numberOfVariants ? results.requiredSampleSizePerVariant * results.numberOfVariants : undefined;
 
 
   return (
@@ -519,22 +532,28 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
         <CardTitle className="font-headline text-2xl">MDE to Sample Size Results</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {results.requiredSampleSize === undefined && (!results.warnings || results.warnings.length === 0) && (
+        {results.requiredSampleSizePerVariant === undefined && (!results.warnings || results.warnings.length === 0) && (
             <p className="text-muted-foreground text-center py-8">Please run the calculation with valid inputs.</p>
         )}
-        {results.requiredSampleSize !== undefined && results.requiredSampleSize > 0 && (
+        {results.requiredSampleSizePerVariant !== undefined && results.requiredSampleSizePerVariant > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-sm mb-6">
                 <div>
                     <p className="font-medium text-muted-foreground">Required Sample Size (per variant)</p>
-                    <p className="text-2xl font-semibold text-primary">{results.requiredSampleSize?.toLocaleString() || 'N/A'}</p>
+                    <p className="text-2xl font-semibold text-primary">{results.requiredSampleSizePerVariant?.toLocaleString() || 'N/A'}</p>
                 </div>
+                {results.numberOfVariants && totalRequiredSampleSize !== undefined && (
+                    <div>
+                        <p className="font-medium text-muted-foreground">Total Required Sample Size ({results.numberOfVariants} variants)</p>
+                        <p className="text-2xl font-semibold text-primary">{totalRequiredSampleSize.toLocaleString()}</p>
+                    </div>
+                )}
                  {results.exposureNeededPercentage !== undefined && results.targetExperimentDurationDays && totalUsersForDisplay > 0 && (
                     <div>
                         <p className="font-medium text-muted-foreground">Exposure Needed for {results.targetExperimentDurationDays} days</p>
                         <p className="text-2xl font-semibold text-accent">
                             {results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? `${results.exposureNeededPercentage.toFixed(1)}%` : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A'}
                         </p>
-                        <p className="text-xs text-muted-foreground">(Based on ~{Math.round(totalUsersForDisplay).toLocaleString()} total users available over {results.targetExperimentDurationDays} days)</p>
+                        <p className="text-xs text-muted-foreground">(Based on ~{Math.round(totalUsersForDisplay).toLocaleString()} total users available over {results.targetExperimentDurationDays} days for {results.numberOfVariants} variants)</p>
                     </div>
                 )}
                 {results.exposureNeededPercentage === undefined && totalUsersForDisplay <= 0 && results.targetExperimentDurationDays && (
@@ -551,12 +570,18 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
                     <p className="font-medium text-muted-foreground">Power Level</p>
                     <p className="text-lg text-accent">{(results.powerLevel && results.powerLevel * 100)?.toFixed(0) || 'N/A'}%</p>
                 </div>
+                 {results.numberOfVariants && (
+                    <div>
+                        <p className="font-medium text-muted-foreground">Number of Variants</p>
+                        <p className="text-lg text-accent">{results.numberOfVariants}</p>
+                    </div>
+                )}
             </div>
         )}
         
 
         {results.warnings && results.warnings.length > 0 && (
-          <div className={`mt-4 ${results.requiredSampleSize === undefined || results.requiredSampleSize <=0 ? '' : 'pt-4 border-t'}`}>
+          <div className={`mt-4 ${results.requiredSampleSizePerVariant === undefined || results.requiredSampleSizePerVariant <=0 ? '' : 'pt-4 border-t'}`}>
             <h3 className="font-medium text-lg flex items-center text-destructive">
               <AlertTriangle className="mr-2 h-5 w-5" />
               Notices from Calculation
@@ -571,10 +596,9 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
       </CardContent>
        <CardFooter>
         <p className="text-xs text-muted-foreground">
-          Note: These are estimates. Actual test duration may vary based on real-time traffic and achieved effect size. Required sample size is for two variants (A/B).
+          Note: These are estimates. Actual test duration may vary based on real-time traffic and achieved effect size. Required sample size is for {results.numberOfVariants || 2} variants (Control + { (results.numberOfVariants || 2) -1} Treatment(s)).
         </p>
       </CardFooter>
     </Card>
   );
 }
-

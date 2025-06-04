@@ -22,7 +22,7 @@ import {
 } from "@/lib/types";
 import { calculateSampleSizeAction } from "@/actions/ab-analytics-actions";
 import { useState, useEffect } from "react";
-import { Loader2, AlertTriangle, Download } from "lucide-react";
+import { Loader2, AlertTriangle, Download, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
@@ -52,6 +52,7 @@ export function ManualCalculatorForm() {
       targetExperimentDurationDays: 14, 
       statisticalPower: DEFAULT_STATISTICAL_POWER,
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
+      numberOfVariants: 2,
     },
   });
 
@@ -69,30 +70,35 @@ export function ManualCalculatorForm() {
     setIsLoading(true);
     setResults(null); 
     try {
-      const actionInput = {
-        metric: `Manual - ${values.metricType}`, 
+      // Adapt ManualCalculatorFormValues to MdeToSampleSizeFormValues for the action
+      const actionInput: MdeToSampleSizeFormValues = {
+        metric: `Manual - ${values.metricType}`, // Construct a metric name
         metricType: values.metricType,
         mean: values.mean,
         variance: values.variance,
         minimumDetectableEffect: values.minimumDetectableEffect, 
         statisticalPower: values.statisticalPower,
         significanceLevel: values.significanceLevel,
-        historicalDailyTraffic: values.historicalDailyTraffic, 
+        numberOfVariants: values.numberOfVariants,
+        historicalDailyTraffic: values.historicalDailyTraffic, // Specific to manual calc
         targetExperimentDurationDays: values.targetExperimentDurationDays,
-        lookbackDays: values.targetExperimentDurationDays, 
-        realEstate: "Manual Input", 
+        lookbackDays: values.targetExperimentDurationDays, // Contextual
+        realEstate: "Manual Input", // Provide a default
+        // totalUsersInSelectedDuration is not directly used by manual calc path in action
       };
 
       const result = await calculateSampleSizeAction(actionInput);
       
+      // Augment with original manual form values if needed for display or report
       const augmentedResult: MdeToSampleSizeCalculationResults = {
-        ...result,
-        metric: `Manual - ${values.metricType}`,
+        ...result, // result already contains most necessary fields correctly typed
+        metric: `Manual - ${values.metricType}`, // Ensure this is set for the report
         metricType: values.metricType,
         mean: values.mean,
         variance: values.variance,
-        minimumDetectableEffect: values.minimumDetectableEffect / 100, 
+        minimumDetectableEffect: values.minimumDetectableEffect / 100, // Already done in action, but ensure consistency
         significanceLevel: values.significanceLevel,
+        numberOfVariants: values.numberOfVariants,
         historicalDailyTraffic: values.historicalDailyTraffic,
         targetExperimentDurationDays: values.targetExperimentDurationDays,
         lookbackDays: values.targetExperimentDurationDays,
@@ -101,10 +107,10 @@ export function ManualCalculatorForm() {
       
       setResults(augmentedResult);
 
-      if (result.requiredSampleSize !== undefined && result.requiredSampleSize > 0) {
+      if (result.requiredSampleSizePerVariant !== undefined && result.requiredSampleSizePerVariant > 0) {
         toast({
             title: "Calculation Complete",
-            description: "Required sample size and exposure calculated.",
+            description: "Required sample size per variant and exposure calculated.",
         });
       } else if (result.warnings && result.warnings.length > 0) {
         toast({
@@ -135,11 +141,13 @@ export function ManualCalculatorForm() {
   
   const handleDownloadReport = () => {
     if (results) {
-      const reportData = {
-          ...results,
+      const reportData: MdeToSampleSizeCalculationResults = {
+          ...results, // results should already be fully populated MdeToSampleSizeCalculationResults
+          // Ensure any manual-specific overrides are present if needed, though action now handles this better
           metricType: form.getValues("metricType"), 
           targetExperimentDurationDays: form.getValues("targetExperimentDurationDays"),
           historicalDailyTraffic: form.getValues("historicalDailyTraffic"),
+          numberOfVariants: form.getValues("numberOfVariants"),
       };
       downloadManualCalculatorReport(reportData);
     } else {
@@ -225,9 +233,9 @@ export function ManualCalculatorForm() {
             </div>
 
             <Separator />
-            <p className="text-sm text-muted-foreground">Enter traffic and duration parameters:</p>
+            <p className="text-sm text-muted-foreground">Enter traffic, duration and variant parameters:</p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              <FormField
                 control={form.control}
                 name="historicalDailyTraffic"
@@ -252,6 +260,20 @@ export function ManualCalculatorForm() {
                       <Input type="number" placeholder="e.g., 14" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} />
                     </FormControl>
                      <FormDescription className="text-xs">How long you plan to run the experiment.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="numberOfVariants"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Number of Variants</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} />
+                    </FormControl>
+                     <FormDescription className="text-xs">Total variants including control (min 2).</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -297,7 +319,7 @@ export function ManualCalculatorForm() {
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Calculate Sample Size
             </Button>
-            {results && (results.requiredSampleSize !== undefined || (results.warnings && results.warnings.length > 0)) && (
+            {results && (results.requiredSampleSizePerVariant !== undefined || (results.warnings && results.warnings.length > 0)) && (
                 <Button type="button" variant="outline" onClick={handleDownloadReport} className="w-full sm:w-auto">
                     <Download className="mr-2 h-4 w-4" /> Download Report
                 </Button>
@@ -306,28 +328,31 @@ export function ManualCalculatorForm() {
         </form>
         </Form>
 
-        {results && <ManualCalculatorResultsDisplay results={results} targetDurationDays={form.getValues("targetExperimentDurationDays")} />}
+        {results && <ManualCalculatorResultsDisplay results={results} />}
     </div>
   );
 }
 
 interface ManualCalculatorResultsDisplayProps {
     results: MdeToSampleSizeCalculationResults;
-    targetDurationDays?: number;
 }
 
-export function ManualCalculatorResultsDisplay({ results, targetDurationDays }: ManualCalculatorResultsDisplayProps) {
+export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResultsDisplayProps) {
   const dailyUsers = results.historicalDailyTraffic || 0; 
+  const targetDurationDays = results.targetExperimentDurationDays;
+  const numberOfVariants = results.numberOfVariants || 2; // Default to 2 if not present
   
-  const shouldShowCard = results.requiredSampleSize !== undefined || (results.warnings && results.warnings.length > 0);
+  const shouldShowCard = results.requiredSampleSizePerVariant !== undefined || (results.warnings && results.warnings.length > 0);
 
   if (!shouldShowCard) {
      return null; 
   }
 
+  const totalRequiredSampleSize = results.requiredSampleSizePerVariant ? results.requiredSampleSizePerVariant * numberOfVariants : undefined;
+
   let targetDurationInfo: { usersAvailable?: number; isSufficient?: boolean, exposureNeeded?: number } = {};
-  if (targetDurationDays && dailyUsers > 0 && results.requiredSampleSize && results.requiredSampleSize > 0) {
-    const totalRequiredForExposure = results.requiredSampleSize * 2;
+  if (targetDurationDays && dailyUsers > 0 && results.requiredSampleSizePerVariant && results.requiredSampleSizePerVariant > 0) {
+    const totalRequiredForExposure = results.requiredSampleSizePerVariant * numberOfVariants;
     targetDurationInfo.usersAvailable = dailyUsers * targetDurationDays;
     targetDurationInfo.isSufficient = targetDurationInfo.usersAvailable >= totalRequiredForExposure;
     if(targetDurationInfo.usersAvailable > 0) {
@@ -335,28 +360,35 @@ export function ManualCalculatorResultsDisplay({ results, targetDurationDays }: 
     }
   }
 
+
   return (
     <Card className="mt-8 w-full shadow-lg">
       <CardHeader>
         <CardTitle className="font-headline text-2xl">Calculation Results</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {results.requiredSampleSize === undefined && (!results.warnings || results.warnings.length === 0) && (
+        {results.requiredSampleSizePerVariant === undefined && (!results.warnings || results.warnings.length === 0) && (
             <p className="text-muted-foreground text-center py-8">Please run the calculation with valid inputs.</p>
         )}
-        {results.requiredSampleSize !== undefined && results.requiredSampleSize > 0 && (
+        {results.requiredSampleSizePerVariant !== undefined && results.requiredSampleSizePerVariant > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-sm mb-6">
             <div>
                 <p className="font-medium text-muted-foreground">Required Sample Size (per variant)</p>
-                <p className="text-2xl font-semibold text-primary">{results.requiredSampleSize?.toLocaleString() || 'N/A'}</p>
+                <p className="text-2xl font-semibold text-primary">{results.requiredSampleSizePerVariant?.toLocaleString() || 'N/A'}</p>
             </div>
+             {totalRequiredSampleSize !== undefined && (
+                <div>
+                    <p className="font-medium text-muted-foreground">Total Required Sample Size ({numberOfVariants} variants)</p>
+                    <p className="text-2xl font-semibold text-primary">{totalRequiredSampleSize.toLocaleString()}</p>
+                </div>
+            )}
              {results.exposureNeededPercentage !== undefined && results.targetExperimentDurationDays && dailyUsers > 0 && (
                 <div>
                     <p className="font-medium text-muted-foreground">Exposure Needed for {results.targetExperimentDurationDays} days</p>
                     <p className="text-2xl font-semibold text-accent">
                         {results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? `${results.exposureNeededPercentage.toFixed(1)}%` : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A'}
                     </p>
-                     <p className="text-xs text-muted-foreground">(Based on ~{Math.round(dailyUsers).toLocaleString()} daily users)</p>
+                     <p className="text-xs text-muted-foreground">(Based on ~{Math.round(dailyUsers).toLocaleString()} daily users for {numberOfVariants} variants)</p>
                 </div>
             )}
             <div>
@@ -367,15 +399,19 @@ export function ManualCalculatorResultsDisplay({ results, targetDurationDays }: 
                 <p className="font-medium text-muted-foreground">Power Level</p>
                 <p className="text-lg text-accent">{(results.powerLevel && results.powerLevel * 100)?.toFixed(0) || 'N/A'}%</p>
             </div>
+             <div>
+                <p className="font-medium text-muted-foreground">Number of Variants</p>
+                <p className="text-lg text-accent">{numberOfVariants}</p>
+            </div>
             </div>
         )}
         
-         {targetDurationDays && dailyUsers > 0 && results.requiredSampleSize && results.requiredSampleSize > 0 && targetDurationInfo.usersAvailable !== undefined && (
+         {targetDurationDays && dailyUsers > 0 && results.requiredSampleSizePerVariant && results.requiredSampleSizePerVariant > 0 && targetDurationInfo.usersAvailable !== undefined && totalRequiredSampleSize !== undefined && (
                 <div className={cn("text-sm mb-3 p-3 rounded-md shadow", 
                                  targetDurationInfo.isSufficient ? "bg-green-100 text-green-800 border border-green-200" : "bg-red-100 text-red-800 border border-red-200")}>
                     <h4 className="font-semibold mb-1">For your Target Duration of {targetDurationDays} days:</h4>
                     <p>Estimated total available users: <strong>{Math.round(targetDurationInfo.usersAvailable).toLocaleString()}</strong>.</p>
-                    <p>This is {targetDurationInfo.isSufficient ? <strong className="font-semibold">sufficient</strong> : <strong className="font-semibold">not sufficient</strong>} for the total required sample size of {(results.requiredSampleSize * 2).toLocaleString()}.</p>
+                    <p>This is {targetDurationInfo.isSufficient ? <strong className="font-semibold">sufficient</strong> : <strong className="font-semibold">not sufficient</strong>} for the total required sample size of {totalRequiredSampleSize.toLocaleString()} ({numberOfVariants} variants).</p>
                     {targetDurationInfo.exposureNeeded !== undefined && (
                         <p>Required exposure of daily traffic: <strong>{targetDurationInfo.exposureNeeded >=0 && targetDurationInfo.exposureNeeded <= 1000 ? `${targetDurationInfo.exposureNeeded.toFixed(1)}%` : targetDurationInfo.exposureNeeded > 1000 ? '>1000%' : 'N/A'}</strong>.</p>
                     )}
@@ -384,14 +420,14 @@ export function ManualCalculatorResultsDisplay({ results, targetDurationDays }: 
 
 
         {results.warnings && results.warnings.length > 0 && (
-          <div className={`mt-4 ${results.requiredSampleSize === undefined || results.requiredSampleSize <=0 ? '' : 'pt-4 border-t'}`}>
+          <div className={`mt-4 ${results.requiredSampleSizePerVariant === undefined || results.requiredSampleSizePerVariant <=0 ? '' : 'pt-4 border-t'}`}>
             <h3 className="font-medium text-lg flex items-center text-destructive">
               <AlertTriangle className="mr-2 h-5 w-5" />
               Notices from Calculation
             </h3>
             <ul className="list-disc list-inside space-y-1 pl-2 text-destructive bg-destructive/10 p-3 rounded-md">
               {results.warnings.map((warning, index) => (
-                <li key={index} className="text-sm">{warning.replace(/_/g, ' ')}</li>
+                <li key={index} className="text-sm text-destructive">{warning.replace(/_/g, ' ')}</li>
               ))}
             </ul>
           </div>
@@ -399,10 +435,9 @@ export function ManualCalculatorResultsDisplay({ results, targetDurationDays }: 
       </CardContent>
        <CardFooter>
         <p className="text-xs text-muted-foreground">
-          Note: These are estimates. Actual test duration may vary based on real-time traffic and achieved effect size. Required sample size is for two variants (A/B).
+          Note: These are estimates. Actual test duration may vary based on real-time traffic and achieved effect size. Required sample size is for {numberOfVariants} variants (Control + {numberOfVariants - 1} Treatment(s)).
         </p>
       </CardFooter>
     </Card>
   );
 }
-

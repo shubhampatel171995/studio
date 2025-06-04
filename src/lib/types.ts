@@ -18,9 +18,10 @@ export const MdeToSampleSizeFormSchema = z.object({
   minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be a positive number").default(DEFAULT_MDE_PERCENT),
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
-  totalUsersInSelectedDuration: z.coerce.number({invalid_type_error: "Total users must be a number"}).int().positive("Total users must be a positive integer.").optional(),
   targetExperimentDurationDays: z.coerce.number({invalid_type_error: "Duration must be a number"}).int().positive("Target duration must be a positive integer").default(14),
+  totalUsersInSelectedDuration: z.coerce.number({invalid_type_error: "Total users must be a number"}).int().positive("Total users for duration must be a positive integer.").optional(),
   lookbackDays: z.coerce.number().int().positive("Lookback days must be a positive integer").optional(), // Contextual, set by targetExperimentDurationDays when Excel is used
+  numberOfVariants: z.coerce.number().int().min(2, "Must have at least 2 variants (e.g., Control + Treatment)").default(2),
 }).refine(data => {
     if (data.metricType === "Binary") {
       return data.mean >= 0 && data.mean <= 1;
@@ -53,6 +54,7 @@ export const ManualCalculatorFormSchema = z.object({
   targetExperimentDurationDays: z.coerce.number({invalid_type_error: "Duration must be a number"}).int().positive("Target duration must be a positive integer").default(14),
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
+  numberOfVariants: z.coerce.number().int().min(2, "Must have at least 2 variants").default(2),
 }).refine(data => { 
     if (data.metricType === "Binary") {
       return data.mean >= 0 && data.mean <= 1;
@@ -77,7 +79,7 @@ export type ManualCalculatorFormValues = z.infer<typeof ManualCalculatorFormSche
 
 // This type is for the direct output from the calculateSampleSizeAction
 export interface DirectCalculationOutput {
-  requiredSampleSize?: number;
+  requiredSampleSizePerVariant?: number; // Renamed for clarity
   confidenceLevel?: number;
   powerLevel?: number;
   warnings?: string[];
@@ -95,6 +97,7 @@ export type MdeToSampleSizeCalculationResults = DirectCalculationOutput & {
   realEstate?: string; 
   minimumDetectableEffect: number; // MDE as decimal for consistency in results
   significanceLevel: number; // Alpha from form
+  numberOfVariants: number; // Added
   
   // For Manual Calculator
   historicalDailyTraffic?: number; 
@@ -115,6 +118,8 @@ export const SampleSizeToMdeFormSchema = z.object({
   realEstate: z.string().min(1, "Real Estate is required"), // For context/reporting
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
+  // numberOfVariants is not typically used when calculating MDE from a fixed sample size per variant.
+  // The formula for MDE naturally uses sample size per variant.
 });
 
 export type SampleSizeToMdeFormValues = z.infer<typeof SampleSizeToMdeFormSchema>;
