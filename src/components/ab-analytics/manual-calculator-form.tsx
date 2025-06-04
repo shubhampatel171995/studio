@@ -389,7 +389,7 @@ export function ManualCalculatorResultsDisplay({ results, targetDurationDays }: 
               <AlertTriangle className="mr-2 h-5 w-5" />
               Notices from Calculation
             </h3>
-            <ul className="list-disc list-inside space-y-1 pl-2 text-destructive-foreground bg-destructive/10 p-3 rounded-md">
+            <ul className="list-disc list-inside space-y-1 pl-2 text-destructive bg-destructive/10 p-3 rounded-md">
               {results.warnings.map((warning, index) => (
                 <li key={index} className="text-sm">{warning.replace(/_/g, ' ')}</li>
               ))}

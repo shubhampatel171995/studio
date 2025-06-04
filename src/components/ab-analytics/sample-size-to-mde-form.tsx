@@ -103,7 +103,7 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
     <Card className="w-full shadow-lg">
       <CardHeader>
         <CardTitle className="font-headline text-2xl">Sample Size to MDE Inputs</CardTitle>
-        <p className="text-muted-foreground">Enter your available sample size and other parameters to find the achievable MDE.</p>
+        <p className="text-muted-foreground text-xs">Enter your available sample size and other parameters to find the achievable MDE.</p>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -240,7 +240,7 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
               <AlertTriangle className="mr-2 h-5 w-5" />
               Notices
             </h3>
-            <ul className="list-disc list-inside space-y-1 pl-2 text-destructive-foreground bg-destructive/10 p-3 rounded-md">
+            <ul className="list-disc list-inside space-y-1 pl-2 text-destructive bg-destructive/10 p-3 rounded-md">
               {warnings.map((warning, index) => (
                 <li key={index} className="text-sm">{warning.replace(/_/g, ' ')}</li>
               ))}
