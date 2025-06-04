@@ -49,7 +49,6 @@ interface MdeDurationPredictorFormProps {
 export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurationPredictorFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [parsedExcelData, setParsedExcelData] = useState<ExcelDataRow[] | null>(null);
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   
   const [availableMetrics, setAvailableMetrics] = useState<string[]>([]);
   const [availableRealEstates, setAvailableRealEstates] = useState<string[]>([]);
@@ -81,26 +80,21 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     const storedDataString = localStorage.getItem('abalyticsMappedData');
     const storedFileName = localStorage.getItem('abalyticsFileName');
     let dataToUse: ExcelDataRow[];
-    let sourceName: string | null = null;
 
     if (storedDataString && storedFileName) {
       try {
         dataToUse = JSON.parse(storedDataString);
-        sourceName = storedFileName;
       } catch (e) {
         console.error("Failed to parse stored data, using default:", e);
         dataToUse = defaultAbalyticsData;
-        sourceName = "Default Dataset";
         localStorage.removeItem('abalyticsMappedData');
         localStorage.removeItem('abalyticsFileName');
       }
     } else {
       dataToUse = defaultAbalyticsData;
-      sourceName = "Default Dataset";
     }
     
     setParsedExcelData(dataToUse);
-    setUploadedFileName(sourceName);
     
     const uniqueMetrics = Array.from(new Set(dataToUse.map(row => row.metric).filter(Boolean) as string[]));
     setAvailableMetrics(uniqueMetrics);
@@ -131,7 +125,6 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
          form.resetField("realEstate");
       }
 
-      // Auto-set metric type based on the first found entry for the selected metric
       const firstMatchedMetric = parsedExcelData.find(row => row.metric === selectedMetric && row.metricType);
       if (firstMatchedMetric?.metricType) {
         form.setValue("metricType", firstMatchedMetric.metricType);
@@ -166,11 +159,6 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
 
   async function onSubmit(values: MdeDurationPredictorFormValues) {
     if (!parsedExcelData || parsedExcelData.length === 0) {
-        toast({
-            variant: "destructive",
-            title: "No Data Available",
-            description: "Please upload an Excel file or ensure default data is loaded.",
-        });
         onResults(null);
         return;
     }
@@ -183,7 +171,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     const calculationMode: 'mdeToSs' | 'ssToMde' = 
         (activeInputField === 'mde' && values.minimumDetectableEffect && values.minimumDetectableEffect > 0) || (!activeInputField && values.minimumDetectableEffect && values.minimumDetectableEffect > 0 && (!values.sampleSizePerVariant || values.sampleSizePerVariant <= 0)) ? 'mdeToSs' :
         (activeInputField === 'sampleSize' && values.sampleSizePerVariant && values.sampleSizePerVariant > 0) || (!activeInputField && values.sampleSizePerVariant && values.sampleSizePerVariant > 0 && (!values.minimumDetectableEffect || values.minimumDetectableEffect <= 0)) ? 'ssToMde' :
-        'mdeToSs'; // Fallback, though schema should prevent this state
+        'mdeToSs'; 
 
     for (const duration of PREDICTION_DURATIONS) {
       let meanForCalc: number | undefined = undefined;
@@ -302,11 +290,8 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
       <CardHeader className="flex flex-row items-start justify-between">
         <div>
           <CardTitle className="font-headline text-2xl">Dynamic Duration Calculator</CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs mt-1">
             Predict {calculationTarget === 'Sample Size' ? 'sample size' : 'achievable MDE'} needed across different durations.
-             <span className="block text-xs mt-1">
-                {uploadedFileName === "Default Dataset" ? 'Using Default Dataset. Upload your own via "Upload & Map Data".' : `Using data from: ${uploadedFileName}`}
-             </span>
           </CardDescription>
         </div>
         <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
@@ -550,6 +535,3 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
     </Card>
   );
 }
-
-
-    

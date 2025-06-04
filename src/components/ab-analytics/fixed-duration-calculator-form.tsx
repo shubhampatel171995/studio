@@ -45,7 +45,6 @@ interface FixedDurationCalculatorFormProps {
 export function FixedDurationCalculatorForm({ onResults, onDownload, currentResults }: FixedDurationCalculatorFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [parsedExcelData, setParsedExcelData] = useState<ExcelDataRow[] | null>(null);
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   
   const [availableMetrics, setAvailableMetrics] = useState<string[]>([]);
   const [availableRealEstates, setAvailableRealEstates] = useState<string[]>([]);
@@ -90,35 +89,30 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
 
   useEffect(() => {
     const storedDataString = localStorage.getItem('abalyticsMappedData');
-    const storedFileName = localStorage.getItem('abalyticsFileName');
+    const storedFileName = localStorage.getItem('abalyticsFileName'); // Keep for logic but don't display
     let dataToUse: ExcelDataRow[];
-    let sourceName: string | null = null;
 
     if (storedDataString && storedFileName) {
       try {
         dataToUse = JSON.parse(storedDataString);
-        sourceName = storedFileName;
       } catch (e) {
         console.error("Failed to parse stored data, using default:", e);
         dataToUse = defaultAbalyticsData;
-        sourceName = "Default Dataset";
         localStorage.removeItem('abalyticsMappedData');
         localStorage.removeItem('abalyticsFileName');
       }
     } else {
       dataToUse = defaultAbalyticsData;
-      sourceName = "Default Dataset";
     }
     
     setParsedExcelData(dataToUse);
-    setUploadedFileName(sourceName);
     
     const uniqueMetrics = Array.from(new Set(dataToUse.map(row => row.metric).filter(Boolean) as string[]));
     setAvailableMetrics(uniqueMetrics);
     if (uniqueMetrics.length > 0 && !form.getValues("metric")) {
         form.setValue("metric", uniqueMetrics[0]);
     }
-     if (uniqueMetrics.length === 0) { // Should not happen with default data
+     if (uniqueMetrics.length === 0) { 
         form.resetField("metric");
         setAvailableRealEstates([]);
         form.resetField("realEstate");
@@ -198,7 +192,6 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
             form.setValue("mean", NaN);
             form.setValue("variance", NaN);
             form.setValue("totalUsersInSelectedDuration", NaN);
-            // Do not reset metricType here, it should be user-selectable or derived, not blanked
             setIsHistoricalFieldReadOnly(false); 
         }
         if (isUserDrivenSelectorChange && parsedExcelData.length > 0) { 
@@ -320,7 +313,7 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
         <div>
             <CardTitle className="font-headline text-2xl">Fixed Duration Calculator</CardTitle>
              <CardDescription className="text-xs mt-1">
-                {uploadedFileName === "Default Dataset" ? 'Using Default Dataset. Upload your own via "Upload & Map Data" for custom auto-fill.' : `Using data from: ${uploadedFileName}. Select Metric, Real Estate, and Exp Duration to auto-fill.`}
+                Select Metric, Real Estate, and Exp Duration to auto-fill historical data. Use "Upload & Map Data" for custom datasets.
             </CardDescription>
         </div>
         <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
@@ -627,4 +620,3 @@ export function FixedDurationCalculatorResultsDisplay({ results }: FixedDuration
     </Card>
   );
 }
-
