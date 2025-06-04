@@ -11,7 +11,6 @@ import { type MdeToSampleSizeCalculationResults, type SampleSizeToMdeCalculation
 import { downloadMdeToSampleSizeReport, downloadSampleSizeToMdeReport } from '@/components/ab-analytics/report-download';
 import { Calculator, Search, UploadCloud, NotebookPen, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 export default function ABalyticsPage() {
   const [mdeToSampleSizeResults, setMdeToSampleSizeResults] = useState<MdeToSampleSizeCalculationResults | null>(null);
@@ -71,8 +70,8 @@ export default function ABalyticsPage() {
             <TabsTrigger value="sample-size-to-mde" className="text-sm md:text-base">
               <Search className="mr-2 h-4 w-4" /> Sample Size to MDE
             </TabsTrigger>
-            <TabsTrigger value="mde-to-duration" className="text-sm md:text-base">
-              <Clock className="mr-2 h-4 w-4" /> MDE to Sample Size Across Durations
+            <TabsTrigger value="duration-calculator" className="text-sm md:text-base">
+              <Clock className="mr-2 h-4 w-4" /> Duration Calculator
             </TabsTrigger>
           </TabsList>
           
@@ -98,22 +97,14 @@ export default function ABalyticsPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="mde-to-duration">
-            <Card className="w-full shadow-lg">
-              <CardHeader>
-                <CardTitle className="font-headline text-2xl">MDE to Sample Size Across Durations</CardTitle>
-                <CardDescription>
-                  Predict sample size needed across different durations.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                 <MdeDurationPredictorForm 
-                  onResults={handleMdeDurationPredictorResults}
-                  currentResults={mdeDurationPredictorResults}
-                />
-              </CardContent>
-            </Card>
-            {mdeDurationPredictorResults && <MdeDurationPredictorResultsDisplay results={mdeDurationPredictorResults} />}
+          <TabsContent value="duration-calculator">
+            <div className="space-y-6">
+              <MdeDurationPredictorForm 
+                onResults={handleMdeDurationPredictorResults}
+                currentResults={mdeDurationPredictorResults}
+              />
+              {mdeDurationPredictorResults && <MdeDurationPredictorResultsDisplay results={mdeDurationPredictorResults} />}
+            </div>
           </TabsContent>
         </Tabs>
       </main>
@@ -127,4 +118,3 @@ export default function ABalyticsPage() {
     </div>
   );
 }
-

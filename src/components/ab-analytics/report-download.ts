@@ -159,7 +159,7 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
 }
 
 export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredictorFormValues, results: MdeDurationPredictorResultRow[]) {
-  let reportContent = "ABalytics - MDE to Sample Size Across Durations Report\n\n";
+  let reportContent = "ABalytics - Duration Calculator Report\n\n";
   reportContent += "Common Inputs:\n";
   reportContent += `- Metric: ${formValues.metric || 'N/A'}\n`;
   reportContent += `- Real Estate: ${formValues.realEstate || 'N/A'}\n`;
@@ -173,7 +173,7 @@ export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredic
 
   reportContent += "Predictions Across Durations:\n";
   reportContent += "---------------------------------------------------------------------------------------------------\n";
-  reportContent += "Duration | Total Users Available | Total Req. Sample | Exposure Needed (%) | Notices\n";
+  reportContent += "Duration | Total Users Available | Total Req. Sample Size | Exposure Needed (%) | Notices\n";
   reportContent += "---------------------------------------------------------------------------------------------------\n";
 
   results.forEach(row => {
@@ -182,19 +182,18 @@ export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredic
 
     reportContent += `${String(row.duration).padEnd(8)} | `;
     reportContent += `${formatNumberForReport(row.totalUsersAvailable, 0).padEnd(21)} | `;
-    reportContent += `${formatNumberForReport(row.totalRequiredSampleSize, 0).padEnd(19)} | `;
+    reportContent += `${formatNumberForReport(row.totalRequiredSampleSize, 0).padEnd(22)} | `; // Adjusted padding
     reportContent += `${exposure.padEnd(19)} | `;
-    reportContent += `${notices}\n`; // Notices are still included in the report for full context
+    reportContent += `${notices}\n`; 
   });
   reportContent += "---------------------------------------------------------------------------------------------------\n";
 
   const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "abalytics_mde_to_samplesize_across_durations_report.txt";
+  link.download = "abalytics_duration_calculator_report.txt";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(link.href);
 }
-
