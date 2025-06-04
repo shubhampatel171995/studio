@@ -9,6 +9,8 @@ function formatNumberForReport(num: number | undefined | null | string, precisio
     num = parsedNum;
   }
   if (isNaN(num)) return 'N/A'; // After potential parse
+  if (num === Infinity && suffix === '%') return '∞%';
+  if (num > 1000 && suffix === '%' && num !== Infinity) return '>1000%';
   return num.toLocaleString(undefined, { minimumFractionDigits: precision, maximumFractionDigits: precision }) + suffix;
 }
 
@@ -36,7 +38,7 @@ export function downloadMdeToSampleSizeReport(results: MdeToSampleSizeCalculatio
   }
 
   if (results.exposureNeededPercentage !== undefined) {
-      const displayExposure = results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? formatNumberForReport(results.exposureNeededPercentage,1,'%') : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A';
+      const displayExposure = formatNumberForReport(results.exposureNeededPercentage,1,'%');
       reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): ${displayExposure}\n`;
   } else if (results.totalUsersInSelectedDuration && results.totalUsersInSelectedDuration > 0) {
       reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): N/A (Likely due to high sample size or calculation issue)\n`;
@@ -83,7 +85,7 @@ export function downloadSampleSizeToMdeReport(results: SampleSizeToMdeCalculatio
   reportContent += `- Achievable MDE (Relative): ${formatNumberForReport(results.achievableMde, 2, '%')}\n`;
   
   if (results.exposureNeededPercentage !== undefined && results.inputs.totalUsersInSelectedDuration) {
-      const displayExposure = results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? formatNumberForReport(results.exposureNeededPercentage,1,'%') : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A';
+      const displayExposure = formatNumberForReport(results.exposureNeededPercentage,1,'%');
       reportContent += `- Exposure Needed for Target Duration (${results.inputs.targetExperimentDurationDays} days): ${displayExposure}\n`;
   } else if (results.inputs.totalUsersInSelectedDuration && results.inputs.totalUsersInSelectedDuration > 0) {
       reportContent += `- Exposure Needed for Target Duration (${results.inputs.targetExperimentDurationDays} days): N/A (Could not calculate exposure)\n`;
@@ -131,7 +133,7 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
     reportContent += `- Total Required Sample Size (${results.numberOfVariants} variants): ${formatNumberForReport(results.requiredSampleSizePerVariant * results.numberOfVariants)}\n`;
   }
    if (results.exposureNeededPercentage !== undefined) {
-      const displayExposure = results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? formatNumberForReport(results.exposureNeededPercentage,1,'%') : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A';
+      const displayExposure = formatNumberForReport(results.exposureNeededPercentage,1,'%');
       reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): ${displayExposure}\n`;
   } else if (results.historicalDailyTraffic && results.historicalDailyTraffic > 0) {
       reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days): N/A (Likely high sample size/low traffic)\n`;
@@ -167,10 +169,7 @@ export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredic
   reportContent += `- Statistical Power: ${formatNumberForReport(formValues.statisticalPower * 100, 0, '%')}\n`;
   reportContent += `- Significance Level (Alpha): ${formatNumberForReport(formValues.significanceLevel * 100, 0, '%')}\n\n`;
   
-  reportContent += "Baseline Historical Data (used if specific duration data not found in uploaded file):\n";
-  reportContent += `- Mean (Baseline/Default): ${formatNumberForReport(formValues.meanBaseline, 4)}\n`;
-  reportContent += `- Variance (Baseline/Default): ${formatNumberForReport(formValues.varianceBaseline, 6)}\n`;
-  reportContent += `- Historical Daily Traffic (Baseline): ${formatNumberForReport(formValues.historicalDailyTrafficBaseline, 0) || 'N/A'}\n\n`;
+  reportContent += "Note: Mean, Variance, and Total Users are sourced from the uploaded Excel file for each specific duration.\n\n";
 
   reportContent += "Duration Predictions:\n";
   reportContent += "--------------------------------------------------------------------------------------------------------------------\n";
@@ -178,9 +177,7 @@ export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredic
   reportContent += "--------------------------------------------------------------------------------------------------------------------\n";
 
   results.forEach(row => {
-    const exposure = row.exposureNeededPercentage === undefined || row.exposureNeededPercentage === null || (typeof row.exposureNeededPercentage === 'number' && isNaN(row.exposureNeededPercentage))
-                    ? "N/A"
-                    : (typeof row.exposureNeededPercentage === 'number' && row.exposureNeededPercentage > 1000 ? ">1000%" : formatNumberForReport(row.exposureNeededPercentage, 1, '%'));
+    const exposure = formatNumberForReport(row.exposureNeededPercentage, 1, '%');
 
     reportContent += `${String(row.duration).padEnd(8)} | `;
     reportContent += `${formatNumberForReport(row.meanUsed, 4).padEnd(10)} | `;
@@ -202,3 +199,4 @@ export function downloadMdeDurationPredictorReport(formValues: MdeDurationPredic
   document.body.removeChild(link);
   URL.revokeObjectURL(link.href);
 }
+

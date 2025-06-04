@@ -96,7 +96,7 @@ export type MdeToSampleSizeCalculationResults = DirectCalculationOutput & {
   significanceLevel: number; // Alpha from form
   numberOfVariants: number;
   
-  historicalDailyTraffic?: number; // For Manual Calc, or if used as baseline
+  historicalDailyTraffic?: number; // For Manual Calc
   totalUsersInSelectedDuration?: number; // Total users for the targetExperimentDurationDays
 
   targetExperimentDurationDays: number; 
@@ -148,33 +148,14 @@ export interface SampleSizeToMdeCalculationResults {
 
 // Schema for "MDE to Duration Predictor" flow
 export const MdeDurationPredictorFormSchema = z.object({
-  metric: z.string().min(1, "Metric is required"),
-  realEstate: z.string().min(1, "Real Estate is required").default("platform"),
+  metric: z.string().min(1, "Metric is required. Please upload an Excel file with historical data."),
+  realEstate: z.string().min(1, "Real Estate is required. Please upload an Excel file with historical data.").default("platform"),
   metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }).default(METRIC_TYPE_OPTIONS[1]),
-  meanBaseline: z.coerce.number({invalid_type_error: "Mean must be a number"}).refine(val => !isNaN(val), "Mean (Baseline/Default) must be a valid number"),
-  varianceBaseline: z.coerce.number({invalid_type_error: "Variance must be a number"}).nonnegative("Variance (Baseline/Default) must be non-negative"),
-  historicalDailyTrafficBaseline: z.coerce.number({invalid_type_error: "Daily traffic must be a number"}).int().nonnegative("Baseline Daily Traffic must be a non-negative integer.").optional(),
   minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be positive").default(DEFAULT_MDE_PERCENT),
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
   numberOfVariants: z.coerce.number().int().min(2, "Must have at least 2 variants").default(2),
-}).refine(data => {
-    if (data.metricType === "Binary") {
-      return data.meanBaseline >= 0 && data.meanBaseline <= 1;
-    }
-    return true;
-  }, {
-    message: "For Binary metrics, Mean (Baseline/Default) must be between 0 and 1.",
-    path: ["meanBaseline"],
-  }).refine(data => {
-    if (data.metricType === "Continuous" && data.meanBaseline <=0 && !isNaN(data.meanBaseline)) { 
-        return false;
-    }
-    return true;
-  }, {
-    message: "For Continuous metrics, Mean (Baseline/Default) must be positive.",
-    path: ["meanBaseline"],
-  });
+});
 
 export type MdeDurationPredictorFormValues = z.infer<typeof MdeDurationPredictorFormSchema>;
 
@@ -212,3 +193,4 @@ export interface ExcelDataRow {
   lookbackDays?: number;
   [key: string]: any; 
 }
+

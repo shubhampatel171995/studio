@@ -22,7 +22,7 @@ import {
   type ExcelDataRow,
 } from "@/lib/types";
 import { calculateSampleSizeAction } from "@/actions/ab-analytics-actions";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, SettingsIcon, AlertTriangle, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -38,7 +38,6 @@ import {
 } from "@/lib/constants";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 import { downloadMdeDurationPredictorReport } from "@/components/ab-analytics/report-download";
 
 interface MdeDurationPredictorFormProps {
@@ -49,6 +48,7 @@ interface MdeDurationPredictorFormProps {
 export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurationPredictorFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [parsedExcelData, setParsedExcelData] = useState<ExcelDataRow[] | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   
   const [availableMetrics, setAvailableMetrics] = useState<string[]>(DEFAULT_METRIC_OPTIONS);
   const [availableRealEstates, setAvailableRealEstates] = useState<string[]>(DEFAULT_REAL_ESTATE_OPTIONS);
@@ -62,9 +62,6 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
       metric: '',
       realEstate: 'platform',
       metricType: METRIC_TYPE_OPTIONS[1], 
-      meanBaseline: NaN, 
-      varianceBaseline: NaN, 
-      historicalDailyTrafficBaseline: NaN,
       minimumDetectableEffect: DEFAULT_MDE_PERCENT,
       statisticalPower: DEFAULT_STATISTICAL_POWER,
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
@@ -75,20 +72,33 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
   const selectedMetric = form.watch("metric");
   const selectedRealEstate = form.watch("realEstate");
   const selectedMetricType = form.watch("metricType");
-  const meanBaseline = form.watch("meanBaseline");
+
 
   useEffect(() => {
     const storedData = localStorage.getItem('abalyticsMappedData');
+    const storedFileName = localStorage.getItem('abalyticsFileName');
     if (storedData) {
       try {
         const data: ExcelDataRow[] = JSON.parse(storedData);
         setParsedExcelData(data);
+        if(storedFileName) setUploadedFileName(storedFileName);
+
         const uniqueMetrics = Array.from(new Set(data.map(row => row.metric).filter(Boolean) as string[]));
         setAvailableMetrics(uniqueMetrics.length > 0 ? uniqueMetrics : DEFAULT_METRIC_OPTIONS);
         if (uniqueMetrics.length > 0 && !form.getValues("metric")) {
             form.setValue("metric", uniqueMetrics[0]);
         }
-      } catch (e) { console.error("Failed to parse stored data:", e); setParsedExcelData(null); }
+      } catch (e) { 
+          console.error("Failed to parse stored data:", e); 
+          setParsedExcelData(null); 
+          setUploadedFileName(null);
+          setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
+          form.resetField("metric");
+        }
+    } else {
+        setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
+        setParsedExcelData(null);
+        setUploadedFileName(null);
     }
   }, [form]);
 
@@ -111,92 +121,98 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     }
   }, [parsedExcelData, selectedMetric, form]);
   
-  useEffect(() => {
-    if (selectedMetricType === "Binary" && !isNaN(meanBaseline) && meanBaseline >= 0 && meanBaseline <= 1) {
-      const calculatedVariance = meanBaseline * (1 - meanBaseline);
-      form.setValue("varianceBaseline", parseFloat(calculatedVariance.toFixed(6)), { shouldValidate: true });
-    }
-  }, [selectedMetricType, meanBaseline, form]);
-
 
   async function onSubmit(values: MdeDurationPredictorFormValues) {
+    if (!parsedExcelData || parsedExcelData.length === 0) {
+        toast({
+            variant: "destructive",
+            title: "No Data Uploaded",
+            description: "Please upload an Excel file with historical data using the 'Upload & Map Data' button on the main page.",
+        });
+        onResults(null);
+        return;
+    }
+
     setIsLoading(true);
     onResults(null);
     const aggregatedResults: MdeDurationPredictorResultRow[] = [];
 
     for (const duration of PREDICTION_DURATIONS) {
-      let meanForCalc: number = values.meanBaseline;
-      let varianceForCalc: number = values.varianceBaseline;
-      let totalUsersForDuration: number | undefined = values.historicalDailyTrafficBaseline 
-                                                      ? values.historicalDailyTrafficBaseline * duration 
-                                                      : undefined;
+      let meanForCalc: number | string = 'N/A';
+      let varianceForCalc: number | string = 'N/A';
+      let totalUsersForDuration: number | string | undefined = 'N/A';
       let warningsForThisRow: string[] = [];
 
-      if (parsedExcelData && values.metric && values.realEstate) {
-        const matchedRow = parsedExcelData.find(row => 
-          row.metric === values.metric &&
-          row.realEstate === values.realEstate &&
-          row.lookbackDays == duration && // Ensure exact match for duration
-          row.mean !== undefined && row.variance !== undefined && row.totalUsers !== undefined
-        );
+      const matchedRow = parsedExcelData.find(row => 
+        row.metric === values.metric &&
+        row.realEstate === values.realEstate &&
+        row.lookbackDays == duration && // Ensure exact match for duration
+        row.mean !== undefined && !isNaN(Number(row.mean)) &&
+        row.variance !== undefined && !isNaN(Number(row.variance)) &&
+        row.totalUsers !== undefined && !isNaN(Number(row.totalUsers))
+      );
 
-        if (matchedRow) {
-          meanForCalc = matchedRow.mean!;
-          varianceForCalc = matchedRow.variance!;
-          totalUsersForDuration = matchedRow.totalUsers!;
-          warningsForThisRow.push(`Using specific Excel data for ${duration} days.`);
-        } else {
-          warningsForThisRow.push(`Using baseline data for ${duration} days projection.`);
-          if (totalUsersForDuration === undefined && values.historicalDailyTrafficBaseline === undefined) {
-            warningsForThisRow.push("Baseline daily traffic not provided; cannot estimate total users or exposure.");
-          }
-        }
+      if (matchedRow) {
+        meanForCalc = Number(matchedRow.mean);
+        varianceForCalc = Number(matchedRow.variance);
+        totalUsersForDuration = Number(matchedRow.totalUsers);
       } else {
-         warningsForThisRow.push(`No Excel data loaded. Using baseline data for ${duration} days projection.`);
-         if (totalUsersForDuration === undefined && values.historicalDailyTrafficBaseline === undefined) {
-            warningsForThisRow.push("Baseline daily traffic not provided; cannot estimate total users or exposure.");
-          }
+        warningsForThisRow.push(`Data not found in uploaded file for ${duration}-day duration.`);
       }
       
-      try {
-        const actionInput = {
-          metric: values.metric,
-          metricType: values.metricType,
-          mean: meanForCalc,
-          variance: varianceForCalc,
-          minimumDetectableEffect: values.minimumDetectableEffect, // Already in %
-          statisticalPower: values.statisticalPower,
-          significanceLevel: values.significanceLevel,
-          numberOfVariants: values.numberOfVariants,
-          realEstate: values.realEstate,
-          targetExperimentDurationDays: duration,
-          totalUsersInSelectedDuration: totalUsersForDuration,
-        };
+      if (typeof meanForCalc === 'number' && typeof varianceForCalc === 'number') {
+        try {
+          const actionInput = {
+            metric: values.metric,
+            metricType: values.metricType,
+            mean: meanForCalc,
+            variance: varianceForCalc,
+            minimumDetectableEffect: values.minimumDetectableEffect, 
+            statisticalPower: values.statisticalPower,
+            significanceLevel: values.significanceLevel,
+            numberOfVariants: values.numberOfVariants,
+            realEstate: values.realEstate,
+            targetExperimentDurationDays: duration,
+            totalUsersInSelectedDuration: typeof totalUsersForDuration === 'number' ? totalUsersForDuration : undefined,
+          };
 
-        const result = await calculateSampleSizeAction(actionInput);
-        aggregatedResults.push({
-          duration,
-          meanUsed: meanForCalc,
-          varianceUsed: varianceForCalc,
-          totalUsersAvailable: totalUsersForDuration,
-          requiredSampleSizePerVariant: result.requiredSampleSizePerVariant,
-          totalRequiredSampleSize: result.requiredSampleSizePerVariant && values.numberOfVariants ? result.requiredSampleSizePerVariant * values.numberOfVariants : undefined,
-          exposureNeededPercentage: result.exposureNeededPercentage,
-          warnings: [...warningsForThisRow, ...(result.warnings || [])],
-        });
+          const result = await calculateSampleSizeAction(actionInput);
+          aggregatedResults.push({
+            duration,
+            meanUsed: meanForCalc,
+            varianceUsed: varianceForCalc,
+            totalUsersAvailable: totalUsersForDuration,
+            requiredSampleSizePerVariant: result.requiredSampleSizePerVariant,
+            totalRequiredSampleSize: result.requiredSampleSizePerVariant && values.numberOfVariants ? result.requiredSampleSizePerVariant * values.numberOfVariants : undefined,
+            exposureNeededPercentage: result.exposureNeededPercentage,
+            warnings: [...warningsForThisRow, ...(result.warnings || [])],
+          });
 
-      } catch (error) {
-        console.error(`Error calculating for duration ${duration}:`, error);
-        aggregatedResults.push({
-          duration,
-          meanUsed: meanForCalc,
-          varianceUsed: varianceForCalc,
-          totalUsersAvailable: totalUsersForDuration,
-          requiredSampleSizePerVariant: 'Error',
-          totalRequiredSampleSize: 'Error',
-          exposureNeededPercentage: 'Error',
-          warnings: [...warningsForThisRow, `Calculation error: ${error instanceof Error ? error.message : 'Unknown error'}`],
-        });
+        } catch (error) {
+          console.error(`Error calculating for duration ${duration}:`, error);
+          aggregatedResults.push({
+            duration,
+            meanUsed: meanForCalc,
+            varianceUsed: varianceForCalc,
+            totalUsersAvailable: totalUsersForDuration,
+            requiredSampleSizePerVariant: 'Error',
+            totalRequiredSampleSize: 'Error',
+            exposureNeededPercentage: 'Error',
+            warnings: [...warningsForThisRow, `Calculation error: ${error instanceof Error ? error.message : 'Unknown error'}`],
+          });
+        }
+      } else {
+         // Data was N/A from the start (no match in Excel)
+         aggregatedResults.push({
+            duration,
+            meanUsed: 'N/A',
+            varianceUsed: 'N/A',
+            totalUsersAvailable: 'N/A',
+            requiredSampleSizePerVariant: 'N/A',
+            totalRequiredSampleSize: 'N/A',
+            exposureNeededPercentage: 'N/A',
+            warnings: warningsForThisRow,
+          });
       }
     }
     onResults(aggregatedResults);
@@ -207,13 +223,14 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
   const handleDownloadReport = () => {
     if (currentResults && form.formState.isValid) {
       downloadMdeDurationPredictorReport(form.getValues(), currentResults);
-    } else {
+    } else if (!parsedExcelData || parsedExcelData.length === 0) {
+        toast({ variant: "destructive", title: "Cannot Download Report", description: "Please upload data first." });
+    }
+    else {
        toast({ variant: "destructive", title: "Cannot Download Report", description: "Please calculate results first or ensure form inputs are valid." });
     }
   };
   
-  const isVarianceBaselineReadOnly = selectedMetricType === "Binary" && !isNaN(meanBaseline) && meanBaseline >= 0 && meanBaseline <= 1;
-
   // Function to clear results when key inputs change
   const clearResultsOnInputChange = () => {
     onResults(null);
@@ -222,131 +239,107 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
 
   return (
     <div className="space-y-6">
-      <Form {...form}>
-        <FormProvider {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <div className="flex justify-end">
-                <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                            <SettingsIcon className="mr-2 h-4 w-4" /> Statistical Settings
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                        <FormProvider {...form}>
-                            <DialogHeader>
-                                <DialogTitle>Advanced Statistical Settings</DialogTitle>
-                                <p className="text-xs text-muted-foreground">Adjust statistical power and significance level (alpha).</p>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <FormField control={form.control} name="statisticalPower" render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Statistical Power (1 - β)</FormLabel>
-                                    <FormControl><Input type="number" placeholder="e.g., 0.8" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="0.01" min="0.01" max="0.99" /></FormControl>
-                                    <FormDescription className="text-xs">Typically 0.8 (80%).</FormDescription><FormMessage />
-                                </FormItem>)} />
-                                <FormField control={form.control} name="significanceLevel" render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Significance Level (α)</FormLabel>
-                                    <FormControl><Input type="number" placeholder="e.g., 0.05" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="0.01" min="0.01" max="0.99" /></FormControl>
-                                    <FormDescription className="text-xs">Typically 0.05 (5%).</FormDescription><FormMessage />
-                                </FormItem>)} />
-                            </div>
-                            <DialogFooter><DialogClose asChild><Button type="button">Done</Button></DialogClose></DialogFooter>
-                        </FormProvider>
-                    </DialogContent>
-                </Dialog>
-            </div>
-            
-            <Separator />
-            <p className="text-sm font-medium text-foreground">Experiment Configuration</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <FormField control={form.control} name="metric" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Metric</FormLabel>
-                  <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange();}} value={field.value} disabled={!availableMetrics.length}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select Metric" /></SelectTrigger></FormControl>
-                    <SelectContent>{availableMetrics.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>)} />
-              <FormField control={form.control} name="realEstate" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Real Estate</FormLabel>
-                  <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value} disabled={!selectedMetric || !availableRealEstates.length}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select Real Estate" /></SelectTrigger></FormControl>
-                    <SelectContent>{availableRealEstates.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>)} />
-              <FormField control={form.control} name="metricType" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Metric Type</FormLabel>
-                  <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); form.setValue('varianceBaseline', NaN); }} value={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger></FormControl>
-                    <SelectContent>{METRIC_TYPE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>)} />
-              <FormField control={form.control} name="minimumDetectableEffect" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>MDE (%)</FormLabel>
-                  <FormControl><Input type="number" placeholder="e.g., 0.5" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="any"/></FormControl>
-                  <FormDescription className="text-xs">Minimum change you want to detect.</FormDescription>
-                  <FormMessage />
-                </FormItem>)} />
-              <FormField control={form.control} name="numberOfVariants" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Number of Variants</FormLabel>
-                  <FormControl><Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} /></FormControl>
-                  <FormDescription className="text-xs">Incl. control (min 2).</FormDescription>
-                  <FormMessage />
-                </FormItem>)} />
-            </div>
-            
-            <Separator />
-            <p className="text-sm font-medium text-foreground">Baseline Historical Data (used if specific duration data isn't in uploaded file)</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <FormField control={form.control} name="meanBaseline" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Mean (Baseline/Default)</FormLabel>
-                  <FormControl><Input type="number" placeholder={selectedMetricType === 'Binary' ? "e.g., 0.1" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="any" /></FormControl>
-                  <FormDescription className="text-xs">{selectedMetricType === 'Binary' ? "Proportion (0-1)." : "Average value."}</FormDescription>
-                  <FormMessage />
-                </FormItem>)} />
-              <FormField control={form.control} name="varianceBaseline" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Variance (Baseline/Default)</FormLabel>
-                  <FormControl><Input type="number" placeholder="e.g., 0.1275" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="any" readOnly={isVarianceBaselineReadOnly} /></FormControl>
-                  {isVarianceBaselineReadOnly ? 
-                      <FormDescription className="text-xs text-primary">Auto-calculated (p*(1-p))</FormDescription> :
-                      <FormDescription className="text-xs">Enter metric variance.</FormDescription>
-                  }
-                  <FormMessage />
-                </FormItem>)} />
-              <FormField control={form.control} name="historicalDailyTrafficBaseline" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Historical Daily Traffic (Baseline)</FormLabel>
-                  <FormControl><Input type="number" placeholder="e.g., 10000" {...field} value={isNaN(field.value ?? NaN) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} /></FormControl>
-                  <FormDescription className="text-xs">Avg daily users. Used if specific duration data not found.</FormDescription>
-                  <FormMessage />
-                </FormItem>)} />
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Predict Durations
-              </Button>
-              {currentResults && (
-                 <Button type="button" variant="outline" onClick={handleDownloadReport} className="w-full sm:w-auto" disabled={isLoading}>
-                    <Download className="mr-2 h-4 w-4" /> Download Report
-                 </Button>
-              )}
-            </div>
-          </form>
-        </FormProvider>
-      </Form>
+      <FormProvider {...form}>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                <div className="flex justify-end">
+                    <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                                <SettingsIcon className="mr-2 h-4 w-4" /> Statistical Settings
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[425px]">
+                            <FormProvider {...form}>
+                                <DialogHeader>
+                                    <DialogTitle>Advanced Statistical Settings</DialogTitle>
+                                    <p className="text-xs text-muted-foreground">Adjust statistical power and significance level (alpha).</p>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <FormField control={form.control} name="statisticalPower" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Statistical Power (1 - β)</FormLabel>
+                                        <FormControl><Input type="number" placeholder="e.g., 0.8" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="0.01" min="0.01" max="0.99" /></FormControl>
+                                        <FormDescription className="text-xs">Typically 0.8 (80%).</FormDescription><FormMessage />
+                                    </FormItem>)} />
+                                    <FormField control={form.control} name="significanceLevel" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Significance Level (α)</FormLabel>
+                                        <FormControl><Input type="number" placeholder="e.g., 0.05" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="0.01" min="0.01" max="0.99" /></FormControl>
+                                        <FormDescription className="text-xs">Typically 0.05 (5%).</FormDescription><FormMessage />
+                                    </FormItem>)} />
+                                </div>
+                                <DialogFooter><DialogClose asChild><Button type="button">Done</Button></DialogClose></DialogFooter>
+                            </FormProvider>
+                        </DialogContent>
+                    </Dialog>
+                </div>
+                
+                <Separator />
+                <p className="text-sm font-medium text-foreground">Experiment Configuration</p>
+                 <p className="text-xs text-muted-foreground -mt-6">
+                    This predictor relies on data uploaded via "Upload & Map Data". Ensure your file contains entries for 7, 14, 21, and 30 day lookback periods for the selected Metric & Real Estate.
+                    {uploadedFileName && <span className="block mt-1">Currently using: <strong>{uploadedFileName}</strong></span>}
+                    {!uploadedFileName && <span className="block mt-1 text-destructive"><strong>No data file uploaded. Please upload data via the main page.</strong></span>}
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <FormField control={form.control} name="metric" render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Metric</FormLabel>
+                    <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange();}} value={field.value} disabled={!availableMetrics.length || !parsedExcelData}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select Metric" /></SelectTrigger></FormControl>
+                        <SelectContent>{availableMetrics.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <FormMessage />
+                    </FormItem>)} />
+                <FormField control={form.control} name="realEstate" render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Real Estate</FormLabel>
+                    <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value} disabled={!selectedMetric || !availableRealEstates.length || !parsedExcelData}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select Real Estate" /></SelectTrigger></FormControl>
+                        <SelectContent>{availableRealEstates.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <FormMessage />
+                    </FormItem>)} />
+                <FormField control={form.control} name="metricType" render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Metric Type</FormLabel>
+                    <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger></FormControl>
+                        <SelectContent>{METRIC_TYPE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <FormMessage />
+                    </FormItem>)} />
+                <FormField control={form.control} name="minimumDetectableEffect" render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>MDE (%)</FormLabel>
+                    <FormControl><Input type="number" placeholder="e.g., 0.5" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} step="any"/></FormControl>
+                    <FormDescription className="text-xs">Minimum change you want to detect.</FormDescription>
+                    <FormMessage />
+                    </FormItem>)} />
+                <FormField control={form.control} name="numberOfVariants" render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Number of Variants</FormLabel>
+                    <FormControl><Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); clearResultsOnInputChange();}} /></FormControl>
+                    <FormDescription className="text-xs">Incl. control (min 2).</FormDescription>
+                    <FormMessage />
+                    </FormItem>)} />
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Button type="submit" disabled={isLoading || !parsedExcelData} className="w-full sm:w-auto">
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Predict Durations
+                </Button>
+                {currentResults && (
+                    <Button type="button" variant="outline" onClick={handleDownloadReport} className="w-full sm:w-auto" disabled={isLoading}>
+                        <Download className="mr-2 h-4 w-4" /> Download Report
+                    </Button>
+                )}
+                </div>
+            </form>
+        </Form>
+      </FormProvider>
     </div>
   );
 }
@@ -366,8 +359,10 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
     }
     if (typeof value === 'number') {
       if (isLargeNumber) return value.toLocaleString();
-      const numStr = isPercentage ? `${value.toFixed(1)}%` : value.toFixed(4);
-      return value > 1000 && isPercentage ? '>1000%' : numStr;
+      const numStr = isPercentage ? `${value.toFixed(1)}%` : value.toFixed(4); // Keep precision for mean/variance
+      if (value > 1000 && isPercentage && (value !== Infinity) ) return '>1000%';
+      if(value === Infinity && isPercentage) return '∞%';
+      return numStr;
     }
     return String(value);
   };
@@ -404,9 +399,9 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
                 <TableCell className="text-primary font-semibold">{formatCell(row.exposureNeededPercentage, true)}</TableCell>
                 <TableCell>
                   {row.warnings && row.warnings.length > 0 && (
-                    <ul className="list-disc list-inside text-xs">
+                    <ul className="list-disc list-inside text-xs space-y-0.5">
                       {row.warnings.map((warn, i) => (
-                        <li key={i} className={warn.toLowerCase().includes("error") || warn.toLowerCase().includes("cannot estimate") ? "text-destructive" : "text-muted-foreground"}>
+                        <li key={i} className={warn.toLowerCase().includes("error") || warn.toLowerCase().includes("cannot estimate") || warn.toLowerCase().includes("not found") ? "text-destructive" : "text-muted-foreground"}>
                           {warn.replace(/_/g, ' ')}
                         </li>
                       ))}
@@ -421,3 +416,4 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
     </Card>
   );
 }
+
