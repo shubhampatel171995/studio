@@ -46,8 +46,7 @@ export default function ABalyticsPage() {
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <header className="sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-end"> {/* Adjusted justify-content */}
-          {/* Removed ABalytics Name and Logo */}
+        <div className="container flex h-16 items-center justify-end"> 
           <div className="flex items-center gap-2">
             <Button asChild variant="outline">
               <Link href="/manual-calculator">
@@ -100,13 +99,21 @@ export default function ABalyticsPage() {
           </TabsContent>
 
           <TabsContent value="mde-to-duration">
-            <div className="space-y-6">
-              <MdeDurationPredictorForm 
-                onResults={handleMdeDurationPredictorResults}
-                currentResults={mdeDurationPredictorResults}
-              />
-              {mdeDurationPredictorResults && <MdeDurationPredictorResultsDisplay results={mdeDurationPredictorResults} />}
-            </div>
+            <Card className="w-full shadow-lg">
+              <CardHeader>
+                <CardTitle className="font-headline text-2xl">MDE to Sample Size Across Durations</CardTitle>
+                <CardDescription>
+                  Predict sample size needed across different durations.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                 <MdeDurationPredictorForm 
+                  onResults={handleMdeDurationPredictorResults}
+                  currentResults={mdeDurationPredictorResults}
+                />
+              </CardContent>
+            </Card>
+            {mdeDurationPredictorResults && <MdeDurationPredictorResultsDisplay results={mdeDurationPredictorResults} />}
           </TabsContent>
         </Tabs>
       </main>
