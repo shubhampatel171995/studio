@@ -289,9 +289,9 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>Advanced Statistical Settings</DialogTitle>
-                    <FormDescription className="text-xs">
+                    <p className="text-xs text-muted-foreground">
                         Adjust statistical power and significance level (alpha).
-                    </FormDescription>
+                    </p>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <FormField
@@ -500,6 +500,9 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                         {!isHistoricalFieldReadOnly && 
                             <FormDescription className="text-xs">Enter total unique users for your target experiment duration.</FormDescription>
                         }
+                        {isHistoricalFieldReadOnly && 
+                            <FormDescription className="text-xs">For the selected {targetExperimentDuration}-day duration.</FormDescription>
+                        }
                         <FormMessage />
                     </FormItem>
                 )}
@@ -543,17 +546,8 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
       </CardHeader>
       <CardContent className="space-y-6">
         {onlyShowWarnings && results.warnings && (
-            <div className="mt-4">
-                <h3 className="font-medium text-lg flex items-center text-destructive">
-                <AlertTriangle className="mr-2 h-5 w-5" />
-                Notices
-                </h3>
-                <ul className="list-disc list-inside space-y-1 pl-2 text-destructive bg-destructive/10 p-3 rounded-md">
-                {results.warnings.map((warning, index) => (
-                    <li key={index} className="text-sm text-destructive">{warning.replace(/_/g, ' ')}</li>
-                ))}
-                </ul>
-            </div>
+             <div className="mt-4">
+             </div>
         )}
 
         {!onlyShowWarnings && results.requiredSampleSizePerVariant === undefined && (!results.warnings || results.warnings.length === 0) && (
@@ -568,7 +562,7 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
                 </div>
                 {results.numberOfVariants && totalRequiredSampleSize !== undefined && (
                     <div>
-                        <p className="font-medium text-muted-foreground">Total Required Sample Size ({results.numberOfVariants} variants)</p>
+                        <p className="font-medium text-muted-foreground">Total Required Sample Size</p>
                         <p className="text-2xl font-semibold text-primary">{totalRequiredSampleSize.toLocaleString()}</p>
                     </div>
                 )}
@@ -578,7 +572,7 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
                         <p className="text-2xl font-semibold text-primary">
                             {results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? `${results.exposureNeededPercentage.toFixed(1)}%` : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A'}
                         </p>
-                        <p className="text-xs text-muted-foreground">(Based on {Math.round(totalUsersForDisplay).toLocaleString()} total users available over {results.targetExperimentDurationDays} days for {results.numberOfVariants} variants)</p>
+                        <p className="text-xs text-muted-foreground">(Based on {Math.round(totalUsersForDisplay).toLocaleString()} total users available over {results.targetExperimentDurationDays} days)</p>
                     </div>
                 )}
                 {results.exposureNeededPercentage === undefined && totalUsersForDisplay <= 0 && results.targetExperimentDurationDays && (
