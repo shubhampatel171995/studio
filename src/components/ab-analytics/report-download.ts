@@ -17,20 +17,19 @@ export function downloadMdeToSampleSizeReport(results: MdeToSampleSizeCalculatio
   reportContent += `- Target Experiment Duration / Historical Data Lookback Used: ${formatNumber(lookbackContext)} days\n`;
   
   reportContent += `- Target MDE: ${formatNumber(results.minimumDetectableEffect ? results.minimumDetectableEffect * 100 : null, 2, '%')}\n`;
-  reportContent += `- Mean (Historical, for selected duration): ${formatNumber(results.mean, 4)}\n`;
-  reportContent += `- Variance (Historical, for selected duration): ${formatNumber(results.variance, 6)}\n`;
+  reportContent += `- Mean (Historical, for selected duration/manual): ${formatNumber(results.mean, 4)}\n`;
+  reportContent += `- Variance (Historical, for selected duration/manual): ${formatNumber(results.variance, 6)}\n`;
   reportContent += `- Number of Variants: ${formatNumber(results.numberOfVariants, 0)}\n`;
   
   let trafficSourceNote = "(manual input or no file match for target duration)";
   if (results.realEstate && results.metric && results.lookbackDays === results.targetExperimentDurationDays && results.totalUsersInSelectedDuration !== undefined) {
     trafficSourceNote = `(from uploaded file for the ${formatNumber(results.targetExperimentDurationDays)} days target duration)`;
+  } else if (results.totalUsersInSelectedDuration !== undefined) {
+    trafficSourceNote = "(manual input for target duration)";
   }
   
   if (results.totalUsersInSelectedDuration !== undefined) {
     reportContent += `- Total Users for Target Duration ${trafficSourceNote}: ${formatNumber(results.totalUsersInSelectedDuration, 0)} users\n`;
-  } else if (results.historicalDailyTraffic !== undefined && results.targetExperimentDurationDays > 0){
-    const totalCalculated = results.historicalDailyTraffic * results.targetExperimentDurationDays;
-    reportContent += `- Total Users for Target Duration (calculated from daily traffic): ${formatNumber(totalCalculated, 0)} users\n`;
   }
 
 
@@ -48,18 +47,10 @@ export function downloadMdeToSampleSizeReport(results: MdeToSampleSizeCalculatio
       reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days, ${results.numberOfVariants} variants): ${displayExposure}\n`;
   } else if (results.totalUsersInSelectedDuration && results.totalUsersInSelectedDuration > 0) {
       reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days, ${results.numberOfVariants} variants): N/A (Likely due to high sample size or low traffic for duration)\n`;
-  } else if (results.historicalDailyTraffic && results.historicalDailyTraffic > 0) {
-      reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days, ${results.numberOfVariants} variants): N/A (Likely high sample size or low traffic)\n`;
   } else {
       reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days, ${results.numberOfVariants} variants): N/A (Missing total users data for the duration)\n`;
   }
 
-  if (results.warnings && results.warnings.length > 0) {
-    reportContent += "\nNotices from Calculation:\n";
-    results.warnings.forEach(warning => {
-      reportContent += `- ${warning.replace(/_/g, ' ')}\n`;
-    });
-  }
 
   const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
   const link = document.createElement("a");
@@ -79,15 +70,18 @@ export function downloadSampleSizeToMdeReport(results: SampleSizeToMdeCalculatio
   reportContent += `- Metric Type: ${results.inputs.metricType || 'N/A'}\n`;
   reportContent += `- Real Estate: ${results.inputs.realEstate || 'N/A'}\n`;
   reportContent += `- Target Experiment Duration (for data lookup): ${formatNumber(results.inputs.targetExperimentDurationDays)} days\n`;
-  reportContent += `- Mean (Historical, for selected duration): ${formatNumber(results.inputs.mean, 4)}\n`;
-  reportContent += `- Variance (Historical, for selected duration): ${formatNumber(results.inputs.variance, 6)}\n`;
+  reportContent += `- Mean (Historical, for selected duration/manual): ${formatNumber(results.inputs.mean, 4)}\n`;
+  reportContent += `- Variance (Historical, for selected duration/manual): ${formatNumber(results.inputs.variance, 6)}\n`;
   reportContent += `- Sample Size (per variant): ${formatNumber(results.inputs.sampleSizePerVariant)}\n`;
   reportContent += `- Number of Variants: ${formatNumber(results.inputs.numberOfVariants, 0)}\n`;
   
   let trafficSourceNote = "(manual input or no file match for target duration)";
-   if (results.inputs.realEstate && results.inputs.metric && results.inputs.totalUsersInSelectedDuration !== undefined) { // Assuming totalUsersInSelectedDuration implies it was from file for this duration
+   if (results.inputs.realEstate && results.inputs.metric && results.inputs.totalUsersInSelectedDuration !== undefined) { 
     trafficSourceNote = `(from uploaded file for the ${formatNumber(results.inputs.targetExperimentDurationDays)} days target duration)`;
+  } else if (results.inputs.totalUsersInSelectedDuration !== undefined) {
+    trafficSourceNote = "(manual input for target duration)";
   }
+
   if (results.inputs.totalUsersInSelectedDuration !== undefined) {
     reportContent += `- Total Users for Target Duration Context ${trafficSourceNote}: ${formatNumber(results.inputs.totalUsersInSelectedDuration, 0)} users\n`;
   }
@@ -97,6 +91,16 @@ export function downloadSampleSizeToMdeReport(results: SampleSizeToMdeCalculatio
 
   reportContent += "Calculated Results:\n";
   reportContent += `- Achievable MDE (Relative): ${formatNumber(results.achievableMde, 2, '%')}\n`;
+  
+  if (results.exposureNeededPercentage !== undefined && results.inputs.totalUsersInSelectedDuration) {
+      const displayExposure = results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? formatNumber(results.exposureNeededPercentage,1,'%') : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A';
+      reportContent += `- Exposure Needed for Target Duration (${results.inputs.targetExperimentDurationDays} days, ${results.inputs.numberOfVariants} variants): ${displayExposure}\n`;
+  } else if (results.inputs.totalUsersInSelectedDuration && results.inputs.totalUsersInSelectedDuration > 0) {
+      reportContent += `- Exposure Needed for Target Duration (${results.inputs.targetExperimentDurationDays} days, ${results.inputs.numberOfVariants} variants): N/A (Could not calculate exposure)\n`;
+  } else {
+      reportContent += `- Exposure Needed for Target Duration (${results.inputs.targetExperimentDurationDays} days, ${results.inputs.numberOfVariants} variants): N/A (Missing total users data for the duration)\n`;
+  }
+
 
   if (results.warnings && results.warnings.length > 0) {
     reportContent += "\nNotices from Calculation:\n";
@@ -124,7 +128,7 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
   reportContent += `- Mean (Baseline): ${formatNumber(results.mean, 4)}\n`;
   reportContent += `- Variance: ${formatNumber(results.variance, 6)}\n`; 
   reportContent += `- Number of Variants: ${formatNumber(results.numberOfVariants, 0)}\n`;
-  reportContent += `- Historical Daily Traffic: ${formatNumber(results.historicalDailyTraffic, 0)}\n`;
+  reportContent += `- Historical Daily Traffic: ${formatNumber(results.historicalDailyTraffic, 0)}\n`; // This remains daily traffic for Manual
   if (results.targetExperimentDurationDays !== undefined) {
     reportContent += `- Target Experiment Duration: ${formatNumber(results.targetExperimentDurationDays, 0)} days\n`;
   }
@@ -145,12 +149,6 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
       reportContent += `- Exposure Needed for Target Duration (${results.targetExperimentDurationDays} days, ${results.numberOfVariants} variants): N/A (Missing daily traffic data)\n`;
   }
 
-  if (results.warnings && results.warnings.length > 0) {
-    reportContent += "\nNotices from Calculation:\n";
-    results.warnings.forEach(warning => {
-      reportContent += `- ${warning.replace(/_/g, ' ')}\n`;
-    });
-  }
 
   const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
   const link = document.createElement("a");
@@ -161,3 +159,4 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
   document.body.removeChild(link);
   URL.revokeObjectURL(link.href);
 }
+

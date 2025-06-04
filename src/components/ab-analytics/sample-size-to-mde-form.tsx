@@ -275,7 +275,7 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
         <div>
             <CardTitle className="font-headline text-2xl">Sample Size to MDE Inputs</CardTitle>
             <p className="text-muted-foreground text-xs mt-1">
-            { !uploadedFileName && 'Enter parameters or upload a data file via "Upload & Map Data" for auto-fill.'}
+             Enter parameters or upload a data file via "Upload & Map Data" for auto-fill.
             </p>
         </div>
         <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
@@ -499,9 +499,6 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
                         {!isHistoricalFieldReadOnly && 
                             <FormDescription className="text-xs">Total unique users for the duration (for context).</FormDescription>
                         }
-                        {isHistoricalFieldReadOnly && 
-                            <FormDescription className="text-xs">For the selected {targetExperimentDuration}-day duration.</FormDescription>
-                        }
                         <FormMessage />
                     </FormItem>
                 )}
@@ -529,7 +526,9 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
 export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSizeToMdeCalculationResults | null }) {
   if (!results) return null;
 
-  const { achievableMde, warnings } = results;
+  const { achievableMde, warnings, exposureNeededPercentage, inputs } = results;
+  const { targetExperimentDurationDays, totalUsersInSelectedDuration, numberOfVariants } = inputs;
+
 
   const shouldShowCard = achievableMde !== undefined || (warnings && warnings.length > 0);
 
@@ -548,7 +547,6 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
       <CardContent className="space-y-4">
         {onlyShowWarnings && (
              <div className="mt-4">
-                {/* Warnings section removed as per user request */}
             </div>
         )}
 
@@ -562,9 +560,25 @@ export function SampleSizeToMdeResultsDisplay({ results }: { results: SampleSize
               <p className="font-medium text-muted-foreground">Achievable MDE (Relative)</p>
               <p className="text-2xl font-semibold text-primary">{achievableMde.toFixed(2)}%</p>
             </div>
+            {exposureNeededPercentage !== undefined && targetExperimentDurationDays && totalUsersInSelectedDuration && totalUsersInSelectedDuration > 0 && (
+                <div>
+                    <p className="font-medium text-muted-foreground">Exposure Needed for {targetExperimentDurationDays} days</p>
+                    <p className="text-2xl font-semibold text-primary">
+                        {exposureNeededPercentage >=0 && exposureNeededPercentage <= 1000 ? `${exposureNeededPercentage.toFixed(1)}%` : exposureNeededPercentage > 1000 ? '>1000%' : 'N/A'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">(Based on {Math.round(totalUsersInSelectedDuration).toLocaleString()} total users for {numberOfVariants} variants)</p>
+                </div>
+            )}
+             {exposureNeededPercentage === undefined && totalUsersInSelectedDuration && totalUsersInSelectedDuration <= 0 && targetExperimentDurationDays && (
+                <div>
+                    <p className="font-medium text-muted-foreground">Exposure Needed</p>
+                    <p className="text-lg font-semibold text-destructive">Cannot calculate exposure with zero total users.</p>
+                </div>
+            )}
           </div>
         )}
       </CardContent>
     </Card>
   );
 }
+

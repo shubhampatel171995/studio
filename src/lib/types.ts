@@ -14,7 +14,7 @@ export const MdeToSampleSizeFormSchema = z.object({
   metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }).default(METRIC_TYPE_OPTIONS[1]),
   mean: z.coerce.number({invalid_type_error: "Mean must be a number"}).refine(val => !isNaN(val), "Mean must be a valid number"),
   variance: z.coerce.number({invalid_type_error: "Variance must be a number"}).nonnegative("Variance must be a non-negative number"),
-  realEstate: z.string().min(1, "Real Estate is required"),
+  realEstate: z.string().min(1, "Real Estate is required").default("platform"),
   minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be a positive number").default(DEFAULT_MDE_PERCENT),
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
@@ -99,7 +99,7 @@ export type MdeToSampleSizeCalculationResults = DirectCalculationOutput & {
   numberOfVariants: number;
   
   historicalDailyTraffic?: number; // For Manual Calc
-  totalUsersInSelectedDuration?: number; // For Excel-Driven MDE to Sample Size
+  totalUsersInSelectedDuration?: number; 
 
   targetExperimentDurationDays: number; 
   exposureNeededPercentage?: number; 
@@ -113,12 +113,12 @@ export const SampleSizeToMdeFormSchema = z.object({
   mean: z.coerce.number({invalid_type_error: "Mean must be a number"}).refine(val => !isNaN(val), "Mean must be a valid number"), // For relative MDE and binary variance
   variance: z.coerce.number({invalid_type_error: "Variance must be a number"}).nonnegative("Variance must be a non-negative number"),
   sampleSizePerVariant: z.coerce.number({invalid_type_error: "Sample size must be a number"}).int().positive("Sample size per variant must be a positive integer").default(DEFAULT_SAMPLE_SIZE_PER_VARIANT),
-  realEstate: z.string().min(1, "Real Estate is required"),
+  realEstate: z.string().min(1, "Real Estate is required").default("platform"),
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
   targetExperimentDurationDays: z.coerce.number({invalid_type_error: "Duration must be a number"}).int().positive("Target duration must be a positive integer").default(14),
   totalUsersInSelectedDuration: z.coerce.number({invalid_type_error: "Total users must be a number"}).int().positive("Total users for duration must be a positive integer.").optional(),
-  numberOfVariants: z.coerce.number().int().min(2, "Must have at least 2 variants").default(2), // For UI consistency
+  numberOfVariants: z.coerce.number().int().min(2, "Must have at least 2 variants").default(2), 
 }).refine(data => {
     if (data.metricType === "Binary") {
       return data.mean >= 0 && data.mean <= 1;
@@ -146,6 +146,7 @@ export interface SampleSizeToMdeCalculationResults {
   confidenceLevel?: number; 
   powerLevel?: number; 
   warnings?: string[];
+  exposureNeededPercentage?: number;
 }
 
 

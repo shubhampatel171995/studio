@@ -18,7 +18,6 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
     numberOfVariants, 
     totalUsersInSelectedDuration, 
     targetExperimentDurationDays,
-    lookbackDays, 
   } = formValues;
 
   const localWarnings: string[] = [];
@@ -115,7 +114,7 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
     metricType,
     mean,
     variance,
-    lookbackDays: lookbackDays || targetExperimentDurationDays,
+    lookbackDays: formValues.lookbackDays || targetExperimentDurationDays,
     realEstate,
     minimumDetectableEffect: mdeDecimal, 
     significanceLevel,
@@ -129,13 +128,14 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
 // Action for "Sample Size to MDE" flow
 export async function calculateMdeFromSampleSizeAction(formValues: SampleSizeToMdeFormValues): Promise<Omit<SampleSizeToMdeCalculationResults, 'inputs'>> {
   const {
-    metricType, // New
+    metricType, 
     mean,
     variance,
     sampleSizePerVariant,
     statisticalPower,
     significanceLevel,
-    // numberOfVariants // For UI consistency, not directly in MDE formula from N_per_group
+    numberOfVariants,
+    totalUsersInSelectedDuration,
   } = formValues;
 
   const warnings: string[] = [];
@@ -172,7 +172,6 @@ export async function calculateMdeFromSampleSizeAction(formValues: SampleSizeToM
 
 
   if (warnings.some(w => w.startsWith("Error:") || (w.startsWith("Warning:") && (w.includes("Mean should be positive") || w.includes("Mean (proportion) should be between 0 and 1")) ))) {
-    // Critical warnings prevent calculation
      return { warnings, achievableMde: undefined, confidenceLevel: 1 - significanceLevel, powerLevel: statisticalPower };
   }
 
@@ -194,16 +193,36 @@ export async function calculateMdeFromSampleSizeAction(formValues: SampleSizeToM
   }
   
   if (isNaN(mdeRelative) || !isFinite(mdeRelative)) {
-      if (!warnings.some(w => w.includes("Mean is zero or negative"))) { // Avoid redundant message
+      if (!warnings.some(w => w.includes("Mean is zero or negative"))) { 
         warnings.push(`Could not calculate a valid relative MDE. Check inputs (variance, mean > 0, sample size per variant > 0).`);
       }
-      return { warnings: Array.from(new Set(warnings)), achievableMde: undefined, confidenceLevel: 1 - significanceLevel, powerLevel: statisticalPower };
+      return { 
+        warnings: Array.from(new Set(warnings)), 
+        achievableMde: undefined, 
+        confidenceLevel: 1 - significanceLevel, 
+        powerLevel: statisticalPower 
+      };
   }
+
+  let exposureNeededPercentage: number | undefined = undefined;
+  if (sampleSizePerVariant > 0 && numberOfVariants >= 2) {
+    const totalRequiredSampleSizeForExperiment = sampleSizePerVariant * numberOfVariants;
+    if (totalUsersInSelectedDuration === undefined || isNaN(totalUsersInSelectedDuration) || totalUsersInSelectedDuration <= 0) {
+      warnings.push("Total users for target duration is invalid or zero. Cannot calculate exposure percentage.");
+    } else {
+      exposureNeededPercentage = (totalRequiredSampleSizeForExperiment / totalUsersInSelectedDuration) * 100;
+    }
+  } else if (sampleSizePerVariant <=0) {
+    warnings.push("Sample size per variant is not positive. Exposure estimates cannot be calculated.");
+  }
+
 
   return { 
     achievableMde: parseFloat(mdeRelative.toFixed(2)), 
     warnings: warnings.length > 0 ? Array.from(new Set(warnings)) : undefined,
     confidenceLevel: 1 - significanceLevel,
     powerLevel: statisticalPower,
+    exposureNeededPercentage,
   };
 }
+
