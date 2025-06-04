@@ -13,7 +13,7 @@ export const Z_BETA: Record<string, number> = {
   "0.95": 1.645, // 95% power
 };
 
-export const DEFAULT_LOOKBACK_DAYS = 30;
+export const DEFAULT_LOOKBACK_DAYS = 30; // Retained for potential future use if a default is needed elsewhere
 export const DEFAULT_MDE_PERCENT = 0.5; // MDE as a percentage for form display
 export const DEFAULT_STATISTICAL_POWER = 0.8;
 export const DEFAULT_SIGNIFICANCE_LEVEL = 0.05;
@@ -43,9 +43,7 @@ export const METRIC_OPTIONS = [
   "total__log_mall_gmv_visitor"
 ];
 
-// For "MDE to Sample Size" results table (used by both Excel-driven and Manual calculators)
-export const DURATION_OPTIONS_WEEKS = [1, 2, 3, 4, 5, 6, 7, 8];
-
-// For Manual Calculator Metric Type dropdown
 export const METRIC_TYPE_OPTIONS = ["Binary", "Continuous"] as const;
 
+// For MDE to Duration Predictor
+export const PREDICTION_DURATIONS = [7, 14, 21, 30];

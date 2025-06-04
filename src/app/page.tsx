@@ -8,7 +8,7 @@ import { MdeToSampleSizeForm, MdeToSampleSizeResultsDisplay } from "@/components
 import { SampleSizeToMdeForm, SampleSizeToMdeResultsDisplay } from "@/components/ab-analytics/sample-size-to-mde-form";
 import { type MdeToSampleSizeCalculationResults, type SampleSizeToMdeCalculationResults } from "@/lib/types";
 import { downloadMdeToSampleSizeReport, downloadSampleSizeToMdeReport } from '@/components/ab-analytics/report-download';
-import { Calculator, Search, BarChartHorizontalBig, UploadCloud, NotebookPen } from 'lucide-react';
+import { Calculator, Search, BarChartHorizontalBig, UploadCloud, NotebookPen, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function ABalyticsPage() {
@@ -23,15 +23,15 @@ export default function ABalyticsPage() {
     setSampleSizeToMdeResults(results);
   };
 
-  const handleDownloadMdeToSampleSizeReport = (results: MdeToSampleSizeCalculationResults) => {
-    if (results) {
-      downloadMdeToSampleSizeReport(results);
+  const handleDownloadMdeToSampleSizeReport = () => {
+    if (mdeToSampleSizeResults) {
+      downloadMdeToSampleSizeReport(mdeToSampleSizeResults);
     }
   };
 
-  const handleDownloadSampleSizeToMdeReport = (results: SampleSizeToMdeCalculationResults) => {
-    if (results) {
-      downloadSampleSizeToMdeReport(results);
+  const handleDownloadSampleSizeToMdeReport = () => {
+    if (sampleSizeToMdeResults) {
+      downloadSampleSizeToMdeReport(sampleSizeToMdeResults);
     }
   };
 
@@ -47,6 +47,11 @@ export default function ABalyticsPage() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <Button asChild variant="outline">
+              <Link href="/mde-duration-predictor">
+                <Clock className="mr-2 h-4 w-4" /> MDE to Duration
+              </Link>
+            </Button>
             <Button asChild variant="outline">
               <Link href="/manual-calculator">
                 <NotebookPen className="mr-2 h-4 w-4" /> Manual Calculator
@@ -98,7 +103,7 @@ export default function ABalyticsPage() {
       <footer className="py-6 md:px-8 md:py-0 border-t">
         <div className="container flex flex-col items-center justify-center gap-4 md:h-20 md:flex-row">
           <p className="text-sm leading-loose text-muted-foreground text-center">
-            Powered by Statistical Insights & GenAI. For Meesho Experimentation Platform.
+            Powered by Statistical Insights. For Meesho Experimentation Platform.
           </p>
         </div>
       </footer>
