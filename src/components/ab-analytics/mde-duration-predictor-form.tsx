@@ -21,21 +21,21 @@ import {
   type MdeDurationPredictorResultRow,
   type ExcelDataRow,
   type SampleSizeToMdeFormValues, 
+  type MdeToSampleSizeFormValues,
 } from "@/lib/types";
 import { calculateSampleSizeAction, calculateMdeFromSampleSizeAction } from "@/actions/ab-analytics-actions";
 import { useState, useEffect } from "react";
-import { Loader2, SettingsIcon, Download, AlertTriangle, Info } from "lucide-react"; 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Loader2, SettingsIcon, Download, Info } from "lucide-react"; 
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  METRIC_OPTIONS as DEFAULT_METRIC_OPTIONS, 
-  REAL_ESTATE_OPTIONS as DEFAULT_REAL_ESTATE_OPTIONS, 
   DEFAULT_STATISTICAL_POWER, 
   DEFAULT_SIGNIFICANCE_LEVEL, 
   METRIC_TYPE_OPTIONS,
   PREDICTION_DURATIONS,
 } from "@/lib/constants";
+import { defaultAbalyticsData } from "@/lib/default-data";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { downloadMdeDurationPredictorReport } from "@/components/ab-analytics/report-download";
@@ -51,8 +51,8 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
   const [parsedExcelData, setParsedExcelData] = useState<ExcelDataRow[] | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   
-  const [availableMetrics, setAvailableMetrics] = useState<string[]>(DEFAULT_METRIC_OPTIONS);
-  const [availableRealEstates, setAvailableRealEstates] = useState<string[]>(DEFAULT_REAL_ESTATE_OPTIONS);
+  const [availableMetrics, setAvailableMetrics] = useState<string[]>([]);
+  const [availableRealEstates, setAvailableRealEstates] = useState<string[]>([]);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [activeInputField, setActiveInputField] = useState<'mde' | 'sampleSize' | null>(null);
 
@@ -63,7 +63,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     resolver: zodResolver(MdeDurationPredictorFormSchema),
     defaultValues: {
       metric: '',
-      realEstate: 'platform',
+      realEstate: '',
       metricType: METRIC_TYPE_OPTIONS[1], 
       minimumDetectableEffect: undefined, 
       sampleSizePerVariant: undefined,
@@ -78,30 +78,39 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
   const sampleSizeValue = form.watch("sampleSizePerVariant");
 
   useEffect(() => {
-    const storedData = localStorage.getItem('abalyticsMappedData');
+    const storedDataString = localStorage.getItem('abalyticsMappedData');
     const storedFileName = localStorage.getItem('abalyticsFileName');
-    if (storedData) {
-      try {
-        const data: ExcelDataRow[] = JSON.parse(storedData);
-        setParsedExcelData(data);
-        setUploadedFileName(storedFileName || null);
+    let dataToUse: ExcelDataRow[];
+    let sourceName: string | null = null;
 
-        const uniqueMetrics = Array.from(new Set(data.map(row => row.metric).filter(Boolean) as string[]));
-        setAvailableMetrics(uniqueMetrics.length > 0 ? uniqueMetrics : DEFAULT_METRIC_OPTIONS);
-        if (uniqueMetrics.length > 0 && !form.getValues("metric")) {
-            form.setValue("metric", uniqueMetrics[0]);
-        }
-      } catch (e) { 
-          console.error("Failed to parse stored data:", e); 
-          setParsedExcelData(null); 
-          setUploadedFileName(null);
-          setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
-          form.resetField("metric");
-        }
+    if (storedDataString && storedFileName) {
+      try {
+        dataToUse = JSON.parse(storedDataString);
+        sourceName = storedFileName;
+      } catch (e) {
+        console.error("Failed to parse stored data, using default:", e);
+        dataToUse = defaultAbalyticsData;
+        sourceName = "Default Dataset";
+        localStorage.removeItem('abalyticsMappedData');
+        localStorage.removeItem('abalyticsFileName');
+      }
     } else {
-        setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
-        setParsedExcelData(null);
-        setUploadedFileName(null);
+      dataToUse = defaultAbalyticsData;
+      sourceName = "Default Dataset";
+    }
+    
+    setParsedExcelData(dataToUse);
+    setUploadedFileName(sourceName);
+    
+    const uniqueMetrics = Array.from(new Set(dataToUse.map(row => row.metric).filter(Boolean) as string[]));
+    setAvailableMetrics(uniqueMetrics);
+    if (uniqueMetrics.length > 0 && !form.getValues("metric")) {
+        form.setValue("metric", uniqueMetrics[0]);
+    }
+    if (uniqueMetrics.length === 0) {
+        form.resetField("metric");
+        setAvailableRealEstates([]);
+        form.resetField("realEstate");
     }
   }, [form]);
 
@@ -109,18 +118,28 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     if (parsedExcelData && selectedMetric) {
       const filteredByMetric = parsedExcelData.filter(row => row.metric === selectedMetric);
       const uniqueRealEstates = Array.from(new Set(filteredByMetric.map(row => row.realEstate).filter(Boolean) as string[]));
-      setAvailableRealEstates(uniqueRealEstates.length > 0 ? uniqueRealEstates : DEFAULT_REAL_ESTATE_OPTIONS);
+      setAvailableRealEstates(uniqueRealEstates);
       
       const currentFormRealEstate = form.getValues("realEstate");
       if (uniqueRealEstates.length > 0) {
         if (!uniqueRealEstates.includes(currentFormRealEstate) && currentFormRealEstate !== 'platform') { 
           form.setValue("realEstate", uniqueRealEstates[0]);
-        } else if (!currentFormRealEstate && uniqueRealEstates.includes('platform')) {
-             form.setValue("realEstate", 'platform');
+        } else if (!form.getValues("realEstate") && uniqueRealEstates.length > 0) {
+           form.setValue("realEstate", uniqueRealEstates[0]);
         }
+      } else {
+         form.resetField("realEstate");
       }
-    } else if (!parsedExcelData) {
-        setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS);
+
+      // Auto-set metric type based on the first found entry for the selected metric
+      const firstMatchedMetric = parsedExcelData.find(row => row.metric === selectedMetric && row.metricType);
+      if (firstMatchedMetric?.metricType) {
+        form.setValue("metricType", firstMatchedMetric.metricType);
+      }
+
+    } else if (!selectedMetric) {
+        setAvailableRealEstates([]);
+        form.resetField("realEstate");
     }
   }, [parsedExcelData, selectedMetric, form]);
   
@@ -149,8 +168,8 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     if (!parsedExcelData || parsedExcelData.length === 0) {
         toast({
             variant: "destructive",
-            title: "No Data Uploaded",
-            description: "Please upload an Excel file with historical data using the 'Upload & Map Data' button.",
+            title: "No Data Available",
+            description: "Please upload an Excel file or ensure default data is loaded.",
         });
         onResults(null);
         return;
@@ -159,12 +178,12 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     setIsLoading(true);
     onResults(null);
     const aggregatedResults: MdeDurationPredictorResultRow[] = [];
-    let allCalculationWarnings: string[] = []; 
+    let overallWarnings: string[] = [];
 
     const calculationMode: 'mdeToSs' | 'ssToMde' = 
-        (values.minimumDetectableEffect && values.minimumDetectableEffect > 0) ? 'mdeToSs' :
-        (values.sampleSizePerVariant && values.sampleSizePerVariant > 0) ? 'ssToMde' :
-        'mdeToSs'; // Default if somehow both are invalid after schema validation
+        (activeInputField === 'mde' && values.minimumDetectableEffect && values.minimumDetectableEffect > 0) || (!activeInputField && values.minimumDetectableEffect && values.minimumDetectableEffect > 0 && (!values.sampleSizePerVariant || values.sampleSizePerVariant <= 0)) ? 'mdeToSs' :
+        (activeInputField === 'sampleSize' && values.sampleSizePerVariant && values.sampleSizePerVariant > 0) || (!activeInputField && values.sampleSizePerVariant && values.sampleSizePerVariant > 0 && (!values.minimumDetectableEffect || values.minimumDetectableEffect <= 0)) ? 'ssToMde' :
+        'mdeToSs'; // Fallback, though schema should prevent this state
 
     for (const duration of PREDICTION_DURATIONS) {
       let meanForCalc: number | undefined = undefined;
@@ -186,7 +205,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
         varianceForCalc = Number(matchedRow.variance);
         totalUsersForDuration = Number(matchedRow.totalUsers);
       } else {
-        rowSpecificWarnings.push(`Data_not_found_in_uploaded_file_for_${duration}-day_duration.`);
+        rowSpecificWarnings.push(`Data_not_found_for_${duration}-day_duration.`);
       }
       
       let rowResult: Partial<MdeDurationPredictorResultRow> = { duration, calculationMode, totalUsersAvailable: totalUsersForDuration };
@@ -194,7 +213,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
       if (meanForCalc !== undefined && varianceForCalc !== undefined) {
         try {
           if (calculationMode === 'mdeToSs' && values.minimumDetectableEffect) {
-            const actionInput = {
+            const actionInput: MdeToSampleSizeFormValues = {
               metric: values.metric, 
               metricType: values.metricType,
               mean: meanForCalc,
@@ -207,12 +226,12 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
               targetExperimentDurationDays: duration,
               totalUsersInSelectedDuration: totalUsersForDuration,
             };
-            const result = await calculateSampleSizeAction(actionInput as any); // Cast as any to bypass type mismatch until types are fully aligned
+            const result = await calculateSampleSizeAction(actionInput);
             rowResult.totalRequiredSampleSize = result.requiredSampleSizePerVariant && values.numberOfVariants ? result.requiredSampleSizePerVariant * values.numberOfVariants : undefined;
             rowResult.exposureNeededPercentage = result.exposureNeededPercentage;
             if (result.warnings) {
                 rowSpecificWarnings.push(...result.warnings);
-                allCalculationWarnings.push(...result.warnings.map(w => `${duration}-day: ${w.replace(/_/g, ' ')}`));
+                overallWarnings.push(...result.warnings.map(w => `${duration}-day: ${w.replace(/_/g, ' ')}`));
             }
           } else if (calculationMode === 'ssToMde' && values.sampleSizePerVariant) {
              const actionInput: SampleSizeToMdeFormValues = {
@@ -233,14 +252,14 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
              rowResult.exposureNeededPercentage = result.exposureNeededPercentage;
              if (result.warnings) {
                 rowSpecificWarnings.push(...result.warnings);
-                allCalculationWarnings.push(...result.warnings.map(w => `${duration}-day: ${w.replace(/_/g, ' ')}`));
+                overallWarnings.push(...result.warnings.map(w => `${duration}-day: ${w.replace(/_/g, ' ')}`));
             }
           }
         } catch (error) {
           console.error(`Error calculating for duration ${duration}:`, error);
           const errorMsg = `Calculation_error_for_${duration}-day:_${error instanceof Error ? error.message : 'Unknown_error'}`;
           rowSpecificWarnings.push(errorMsg);
-          allCalculationWarnings.push(errorMsg.replace(/_/g, ' '));
+          overallWarnings.push(errorMsg.replace(/_/g, ' '));
           if (calculationMode === 'mdeToSs') rowResult.totalRequiredSampleSize = 'Error';
           else rowResult.achievableMde = 'Error';
           rowResult.exposureNeededPercentage = 'Error';
@@ -255,14 +274,13 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
     }
     onResults(aggregatedResults);
     setIsLoading(false);
-    
   }
   
   const handleDownloadReport = () => {
     if (currentResults && form.formState.isValid) {
       downloadMdeDurationPredictorReport(form.getValues(), currentResults);
     } else if (!parsedExcelData || parsedExcelData.length === 0) {
-        toast({ variant: "destructive", title: "Cannot Download Report", description: "Please upload data first." });
+        toast({ variant: "destructive", title: "Cannot Download Report", description: "No data available to report." });
     }
     else {
        toast({ variant: "destructive", title: "Cannot Download Report", description: "Please calculate results first or ensure form inputs are valid." });
@@ -286,6 +304,9 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
           <CardTitle className="font-headline text-2xl">Dynamic Duration Calculator</CardTitle>
           <CardDescription>
             Predict {calculationTarget === 'Sample Size' ? 'sample size' : 'achievable MDE'} needed across different durations.
+             <span className="block text-xs mt-1">
+                {uploadedFileName === "Default Dataset" ? 'Using Default Dataset. Upload your own via "Upload & Map Data".' : `Using data from: ${uploadedFileName}`}
+             </span>
           </CardDescription>
         </div>
         <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
@@ -353,7 +374,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
                 <FormField control={form.control} name="metric" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Metric</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value} disabled={!availableMetrics.length || !parsedExcelData}>
+                    <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value} disabled={!availableMetrics.length}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Select Metric" /></SelectTrigger></FormControl>
                       <SelectContent>{availableMetrics.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
                     </Select>
@@ -362,7 +383,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
                 <FormField control={form.control} name="realEstate" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Real Estate</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value} disabled={!selectedMetric || !availableRealEstates.length || !parsedExcelData}>
+                    <Select onValueChange={(value) => { field.onChange(value); clearResultsOnInputChange(); }} value={field.value} disabled={!selectedMetric || !availableRealEstates.length}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Select Real Estate" /></SelectTrigger></FormControl>
                       <SelectContent>{availableRealEstates.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
                     </Select>
@@ -375,6 +396,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
                       <FormControl><SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger></FormControl>
                       <SelectContent>{METRIC_TYPE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
                     </Select>
+                     <FormDescription className="text-xs">Auto-set from data if available.</FormDescription>
                     <FormMessage />
                   </FormItem>)} />
                  <FormField control={form.control} name="numberOfVariants" render={({ field }) => (
@@ -440,7 +462,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
                 </div>
 
               <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                <Button type="submit" disabled={isLoading || !parsedExcelData || (!mdeValue && !sampleSizeValue)} className="w-full sm:w-auto">
+                <Button type="submit" disabled={isLoading || (!mdeValue && !sampleSizeValue)} className="w-full sm:w-auto">
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Predict Durations for {calculationTarget}
                 </Button>

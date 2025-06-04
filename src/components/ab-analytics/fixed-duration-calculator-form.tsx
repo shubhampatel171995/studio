@@ -28,14 +28,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  METRIC_OPTIONS as DEFAULT_METRIC_OPTIONS, 
-  REAL_ESTATE_OPTIONS as DEFAULT_REAL_ESTATE_OPTIONS, 
-  DEFAULT_MDE_PERCENT, 
   DEFAULT_STATISTICAL_POWER, 
   DEFAULT_SIGNIFICANCE_LEVEL, 
   METRIC_TYPE_OPTIONS,
-  DEFAULT_SAMPLE_SIZE_PER_VARIANT
 } from "@/lib/constants";
+import { defaultAbalyticsData } from "@/lib/default-data"; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
@@ -50,8 +47,8 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
   const [parsedExcelData, setParsedExcelData] = useState<ExcelDataRow[] | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   
-  const [availableMetrics, setAvailableMetrics] = useState<string[]>(DEFAULT_METRIC_OPTIONS);
-  const [availableRealEstates, setAvailableRealEstates] = useState<string[]>(DEFAULT_REAL_ESTATE_OPTIONS);
+  const [availableMetrics, setAvailableMetrics] = useState<string[]>([]);
+  const [availableRealEstates, setAvailableRealEstates] = useState<string[]>([]);
   const [isHistoricalFieldReadOnly, setIsHistoricalFieldReadOnly] = useState(false);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [activeInputField, setActiveInputField] = useState<'mde' | 'sampleSize' | null>(null);
@@ -66,7 +63,7 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
       metricType: METRIC_TYPE_OPTIONS[1], 
       mean: NaN, 
       variance: NaN, 
-      realEstate: 'platform',
+      realEstate: '',
       minimumDetectableEffect: undefined, 
       sampleSizePerVariant: undefined, 
       statisticalPower: DEFAULT_STATISTICAL_POWER,
@@ -92,63 +89,62 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
 
 
   useEffect(() => {
-    const storedData = localStorage.getItem('abalyticsMappedData');
+    const storedDataString = localStorage.getItem('abalyticsMappedData');
     const storedFileName = localStorage.getItem('abalyticsFileName');
-    if (storedData && storedFileName) {
+    let dataToUse: ExcelDataRow[];
+    let sourceName: string | null = null;
+
+    if (storedDataString && storedFileName) {
       try {
-        const data: ExcelDataRow[] = JSON.parse(storedData);
-        setParsedExcelData(data);
-        setUploadedFileName(storedFileName);
-        
-        const uniqueMetrics = Array.from(new Set(data.map(row => row.metric).filter(Boolean) as string[]));
-        setAvailableMetrics(uniqueMetrics.length > 0 ? uniqueMetrics : DEFAULT_METRIC_OPTIONS);
-        if (uniqueMetrics.length > 0 && !form.getValues("metric")) {
-            form.setValue("metric", uniqueMetrics[0]);
-        }
-        
+        dataToUse = JSON.parse(storedDataString);
+        sourceName = storedFileName;
       } catch (e) {
-        console.error("Failed to parse stored data:", e);
+        console.error("Failed to parse stored data, using default:", e);
+        dataToUse = defaultAbalyticsData;
+        sourceName = "Default Dataset";
         localStorage.removeItem('abalyticsMappedData');
         localStorage.removeItem('abalyticsFileName');
-        setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
-        setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS);
-        setIsHistoricalFieldReadOnly(false);
       }
     } else {
-        setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
-        setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS);
-        setIsHistoricalFieldReadOnly(false);
-        if (!form.getValues("metric") && DEFAULT_METRIC_OPTIONS.length > 0) form.setValue("metric", DEFAULT_METRIC_OPTIONS[0]);
-        if (DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !form.getValues("realEstate")) {
-             form.setValue("realEstate", "platform"); 
-        }
+      dataToUse = defaultAbalyticsData;
+      sourceName = "Default Dataset";
     }
-  }, [form, toast]);
+    
+    setParsedExcelData(dataToUse);
+    setUploadedFileName(sourceName);
+    
+    const uniqueMetrics = Array.from(new Set(dataToUse.map(row => row.metric).filter(Boolean) as string[]));
+    setAvailableMetrics(uniqueMetrics);
+    if (uniqueMetrics.length > 0 && !form.getValues("metric")) {
+        form.setValue("metric", uniqueMetrics[0]);
+    }
+     if (uniqueMetrics.length === 0) { // Should not happen with default data
+        form.resetField("metric");
+        setAvailableRealEstates([]);
+        form.resetField("realEstate");
+    }
+  }, [form]);
 
 
   useEffect(() => {
     if (parsedExcelData && selectedMetric) {
       const filteredByMetric = parsedExcelData.filter(row => row.metric === selectedMetric);
       const uniqueRealEstates = Array.from(new Set(filteredByMetric.map(row => row.realEstate).filter(Boolean) as string[]));
-      setAvailableRealEstates(uniqueRealEstates.length > 0 ? uniqueRealEstates : DEFAULT_REAL_ESTATE_OPTIONS);
+      setAvailableRealEstates(uniqueRealEstates);
       
       const currentFormRealEstate = form.getValues("realEstate");
       if (uniqueRealEstates.length > 0) {
         if (!uniqueRealEstates.includes(currentFormRealEstate) && currentFormRealEstate !== 'platform') { 
           form.setValue("realEstate", uniqueRealEstates[0]);
-        } else if (!currentFormRealEstate && !uniqueRealEstates.includes('platform')) { 
-            form.setValue("realEstate", uniqueRealEstates[0]);
-        } else if (!currentFormRealEstate && uniqueRealEstates.includes('platform')) {
-             form.setValue("realEstate", 'platform');
+        } else if (!form.getValues("realEstate") && uniqueRealEstates.length > 0) {
+           form.setValue("realEstate", uniqueRealEstates[0]);
         }
-      } else if (DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !parsedExcelData?.length) { 
-          form.setValue("realEstate", form.getValues("realEstate") || "platform");
+      } else {
+         form.resetField("realEstate");
       }
-    } else if (!parsedExcelData) {
-        setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS);
-         if (DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !form.getValues("realEstate")) {
-            form.setValue("realEstate", "platform");
-        }
+    } else if (!selectedMetric) {
+        setAvailableRealEstates([]);
+        form.resetField("realEstate");
     }
   }, [parsedExcelData, selectedMetric, form]);
 
@@ -159,7 +155,6 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
     const userActuallyChangedTargetDuration = prevTargetExperimentDurationRef.current !== targetExperimentDuration && prevTargetExperimentDurationRef.current !== undefined;
     
     const isUserDrivenSelectorChange = userActuallyChangedMetric || userActuallyChangedRealEstate || userActuallyChangedTargetDuration;
-
     let valuesActuallyChangedByAutofill = false;
 
     if (parsedExcelData && selectedMetric && selectedRealEstate && targetExperimentDuration !== undefined && !isNaN(targetExperimentDuration) && targetExperimentDuration > 0) {
@@ -173,6 +168,7 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
         const meanVal = parseFloat(String(matchedRow.mean));
         const varianceVal = parseFloat(String(matchedRow.variance));
         const totalUsersVal = matchedRow.totalUsers ? parseInt(String(matchedRow.totalUsers), 10) : NaN;
+        const metricTypeVal = matchedRow.metricType || METRIC_TYPE_OPTIONS[1];
         
         if (form.getValues("mean") !== meanVal && !(isNaN(form.getValues("mean")) && isNaN(meanVal))) {
             form.setValue("mean", isNaN(meanVal) ? NaN : meanVal, { shouldValidate: true });
@@ -181,6 +177,10 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
         if (form.getValues("variance") !== varianceVal && !(isNaN(form.getValues("variance")) && isNaN(varianceVal))) {
             form.setValue("variance", isNaN(varianceVal) ? NaN : varianceVal, { shouldValidate: true });
              valuesActuallyChangedByAutofill = true;
+        }
+        if (form.getValues("metricType") !== metricTypeVal) {
+            form.setValue("metricType", metricTypeVal, {shouldValidate: true});
+            valuesActuallyChangedByAutofill = true;
         }
 
         const currentTotalUsersInForm = form.getValues("totalUsersInSelectedDuration");
@@ -198,13 +198,14 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
             form.setValue("mean", NaN);
             form.setValue("variance", NaN);
             form.setValue("totalUsersInSelectedDuration", NaN);
+            // Do not reset metricType here, it should be user-selectable or derived, not blanked
             setIsHistoricalFieldReadOnly(false); 
         }
         if (isUserDrivenSelectorChange && parsedExcelData.length > 0) { 
             onResults(null);
         }
       }
-    } else if (!parsedExcelData && isUserDrivenSelectorChange) { 
+    } else if ((!parsedExcelData || parsedExcelData.length === 0) && isUserDrivenSelectorChange) { 
         if(isHistoricalFieldReadOnly) { 
             form.setValue("mean", NaN);
             form.setValue("variance", NaN);
@@ -319,7 +320,7 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
         <div>
             <CardTitle className="font-headline text-2xl">Fixed Duration Calculator</CardTitle>
              <CardDescription className="text-xs mt-1">
-                {!uploadedFileName ? 'Enter parameters or upload a data file via "Upload & Map Data" for auto-fill.' : 'Select Metric, Real Estate, and Exp Duration to auto-fill historical data.'}
+                {uploadedFileName === "Default Dataset" ? 'Using Default Dataset. Upload your own via "Upload & Map Data" for custom auto-fill.' : `Using data from: ${uploadedFileName}. Select Metric, Real Estate, and Exp Duration to auto-fill.`}
             </CardDescription>
         </div>
         <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
@@ -388,17 +389,16 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
                     <FormItem>
                       <FormLabel>Metric</FormLabel>
                       <Select onValueChange={(value) => { field.onChange(value); onResults(null);}} value={field.value} disabled={!availableMetrics.length}>
-                        <FormControl><SelectTrigger><SelectValue placeholder={parsedExcelData ? "Select Metric" : "Select a metric"} /></SelectTrigger></FormControl>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select Metric" /></SelectTrigger></FormControl>
                         <SelectContent>{availableMetrics.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
                       </Select>
-                      {!parsedExcelData && <FormDescription className="text-xs">Upload a file for more options.</FormDescription>}
                       <FormMessage />
                     </FormItem>)} />
                 <FormField control={form.control} name="realEstate" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Real Estate</FormLabel>
                       <Select onValueChange={(value) => { field.onChange(value); onResults(null); }} value={field.value} disabled={!selectedMetric || !availableRealEstates.length}>
-                        <FormControl><SelectTrigger><SelectValue placeholder={parsedExcelData ? "Select Real Estate" : "Select real estate"} /></SelectTrigger></FormControl>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select Real Estate" /></SelectTrigger></FormControl>
                         <SelectContent>{availableRealEstates.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
                       </Select>
                       <FormMessage />
@@ -410,6 +410,7 @@ export function FixedDurationCalculatorForm({ onResults, onDownload, currentResu
                       <FormControl><SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger></FormControl>
                       <SelectContent>{METRIC_TYPE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
                       </Select>
+                      <FormDescription className="text-xs">{isHistoricalFieldReadOnly ? "Auto-filled from data" : "Select manually"}</FormDescription>
                       <FormMessage />
                   </FormItem>)} />
                 <FormField control={form.control} name="targetExperimentDurationDays" render={({ field }) => (
@@ -626,3 +627,4 @@ export function FixedDurationCalculatorResultsDisplay({ results }: FixedDuration
     </Card>
   );
 }
+

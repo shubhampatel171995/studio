@@ -116,9 +116,6 @@ export interface DirectCalculationOutput {
   exposureNeededPercentage?: number;
 }
 
-// This is the comprehensive result type for the MDE to Sample Size feature, 
-// used by both Excel-driven and Manual calculators for displaying results.
-// It can be adapted for the new combined calculator.
 export type MdeToSampleSizeCalculationResults = DirectCalculationOutput & {
   metric: string; 
   metricType: typeof METRIC_TYPE_OPTIONS[number];
@@ -133,7 +130,6 @@ export type MdeToSampleSizeCalculationResults = DirectCalculationOutput & {
   targetExperimentDurationDays: number; 
 };
 
-// Result type for SampleSizeToMde - used for reference
 export interface SampleSizeToMdeCalculationResults {
   inputs: SampleSizeToMdeFormValues; 
   achievableMde?: number; // As percentage
@@ -177,12 +173,12 @@ export const FixedDurationCalculatorFormSchema = z.object({
     path: ["mean"],
   })
   .refine(data => {
-    if (data.metricType === "Continuous" && data.mean <=0 && !isNaN(data.mean)) { 
+    if (data.metricType === "Continuous" && data.mean <=0 && !isNaN(data.mean) && data.minimumDetectableEffect && data.minimumDetectableEffect > 0) { 
         return false;
     }
     return true;
   }, {
-    message: "For Continuous metrics, Mean must be positive.",
+    message: "For Continuous metrics with MDE input, Mean must be positive.",
     path: ["mean"],
   });
 
@@ -206,8 +202,8 @@ export interface FixedDurationCalculatorResults {
 
 // Schema for "Dynamic Duration Calculator"
 export const MdeDurationPredictorFormSchema = z.object({
-  metric: z.string().min(1, "Metric is required. Please upload an Excel file with historical data."),
-  realEstate: z.string().min(1, "Real Estate is required. Please upload an Excel file with historical data.").default("platform"),
+  metric: z.string().min(1, "Metric is required. Please select a metric."),
+  realEstate: z.string().min(1, "Real Estate is required. Please select a real estate.").default("platform"),
   metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }).default(METRIC_TYPE_OPTIONS[1]),
   
   minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be positive if provided").optional(),
@@ -219,8 +215,8 @@ export const MdeDurationPredictorFormSchema = z.object({
 }).refine(data => {
     const mdeProvided = typeof data.minimumDetectableEffect === 'number' && data.minimumDetectableEffect > 0;
     const ssProvided = typeof data.sampleSizePerVariant === 'number' && data.sampleSizePerVariant > 0;
-    if (mdeProvided && ssProvided) return false; // Cannot provide both for calculation
-    return mdeProvided || ssProvided; // At least one must be provided for calculation
+    if (mdeProvided && ssProvided) return false; 
+    return mdeProvided || ssProvided; 
   }, {
     message: "Please provide either MDE (%) or Sample Size (per variant), but not both.",
     path: ["minimumDetectableEffect"], 
@@ -232,8 +228,8 @@ export interface MdeDurationPredictorResultRow {
   duration: number;
   calculationMode: 'mdeToSs' | 'ssToMde';
   totalUsersAvailable?: number | string;
-  totalRequiredSampleSize?: number | string; // Output if mode is 'mdeToSs'
-  achievableMde?: number | string; // Output if mode is 'ssToMde', as percentage
+  totalRequiredSampleSize?: number | string; 
+  achievableMde?: number | string; 
   exposureNeededPercentage?: number | string;
   warnings?: string[]; 
 }
@@ -254,10 +250,12 @@ export type CalculateAIFlowInput = {
 
 export interface ExcelDataRow {
   metric?: string;
+  metricType?: typeof METRIC_TYPE_OPTIONS[number]; // Added to allow default data to specify type
   realEstate?: string;
-  mean?: number;
-  variance?: number;
-  totalUsers?: number; 
-  lookbackDays?: number;
+  mean?: number | string; // Allow string for initial parsing flexibility
+  variance?: number | string; // Allow string
+  totalUsers?: number | string; 
+  lookbackDays?: number | string;
   [key: string]: any; 
 }
+
