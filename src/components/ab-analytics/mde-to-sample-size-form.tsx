@@ -20,7 +20,6 @@ import {
   MdeToSampleSizeFormSchema, 
   type MdeToSampleSizeFormValues, 
   type MdeToSampleSizeCalculationResults,
-  type DurationEstimateRow,
   type ExcelDataRow,
 } from "@/lib/types";
 import { calculateSampleSizeAction } from "@/actions/ab-analytics-actions";
@@ -41,16 +40,12 @@ interface MdeToSampleSizeFormProps {
   currentResults: MdeToSampleSizeCalculationResults | null;
 }
 
-// Helper to find a key in an object ignoring case
-const findKeyIgnoreCase = (obj: Record<string, any>, keyToFind: string): string | undefined => {
-  return Object.keys(obj).find(key => key.toLowerCase() === keyToFind.toLowerCase());
-};
-
-
 export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: MdeToSampleSizeFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [parsedExcelData, setParsedExcelData] = useState<ExcelDataRow[] | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [availableLookbackDays, setAvailableLookbackDays] = useState<number[]>([]);
+  const [isDataFromExcel, setIsDataFromExcel] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<MdeToSampleSizeFormValues>({
@@ -72,12 +67,16 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
   const selectedInputType = form.watch("inputType");
   const selectedMetric = form.watch("metric");
   const selectedRealEstate = form.watch("realEstate");
+  const currentLookbackDays = form.watch("lookbackDays"); // Watch this for the auto-fill effect
 
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
       setParsedExcelData(null);
       setUploadedFileName(null);
+      setAvailableLookbackDays([]);
+      form.reset(); // Reset form if file selection is cancelled
+      onResults(null);
       toast({ title: "File selection cancelled", variant: "default" });
       return;
     }
@@ -92,7 +91,6 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
         const worksheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json<ExcelDataRow>(worksheet, { defval: undefined });
         
-        // Normalize keys to lowercase for easier matching
         const normalizedJsonData = jsonData.map(row => {
             const newRow: ExcelDataRow = {};
             for (const key in row) {
@@ -102,38 +100,37 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
         });
 
         setParsedExcelData(normalizedJsonData);
-        toast({ title: "File parsed successfully!", description: `${normalizedJsonData.length} rows found. Select metric & real estate to auto-fill.`, variant: "default" });
+        onResults(null);
+        toast({ title: "File parsed successfully!", description: `${normalizedJsonData.length} rows found. Select metric, real estate, and lookback period to auto-fill.`, variant: "default" });
       } catch (error) {
         console.error("Error parsing Excel file:", error);
         setParsedExcelData(null);
         setUploadedFileName(null);
-        event.target.value = ''; // Reset file input
+        setAvailableLookbackDays([]);
+        event.target.value = ''; 
+        onResults(null);
         toast({ title: "Error parsing file", description: "Please ensure it's a valid Excel/CSV file with expected columns.", variant: "destructive" });
       }
     };
     reader.onerror = () => {
         setParsedExcelData(null);
         setUploadedFileName(null);
-        event.target.value = ''; // Reset file input
+        setAvailableLookbackDays([]);
+        event.target.value = ''; 
+        onResults(null);
         toast({ title: "Error reading file", variant: "destructive" });
     }
     reader.readAsArrayBuffer(file);
   };
 
+  // Effect to populate available lookback days from Excel
   useEffect(() => {
     if (selectedInputType === "excelData" && parsedExcelData && selectedMetric && selectedRealEstate) {
       const metricKey = 'metric';
-      const realEstateKey = 'realestate'; // expecting lowercase key from normalized data
-      const meanKey = 'mean';
-      const varianceKey = 'variance';
-      const usersKey = 'total users'; // common variations
-      const usersKeyAlt1 = 'numberofusers';
-      const usersKeyAlt2 = 'totalusers';
-      const lookbackKey = 'lookback days'; // common variations
-      const lookbackKeyAlt1 = 'lookbackdays';
+      const realEstateKey = 'realestate';
+      const lookbackKeyExcel = 'lookbackdays';
 
-
-      const matchedRow = parsedExcelData.find(row => {
+      const filteredRows = parsedExcelData.filter(row => {
         const rowMetric = row[metricKey];
         const rowRealEstate = row[realEstateKey];
         return typeof rowMetric === 'string' && typeof rowRealEstate === 'string' &&
@@ -141,47 +138,93 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                rowRealEstate.toLowerCase() === selectedRealEstate.toLowerCase();
       });
 
+      const uniqueLookbacks = Array.from(new Set(
+          filteredRows.map(row => row[lookbackKeyExcel]).filter(lb => typeof lb === 'number' && !isNaN(lb)) as number[]
+      )).sort((a, b) => a - b);
+      
+      setAvailableLookbackDays(uniqueLookbacks);
+
+      const currentFormLookback = form.getValues("lookbackDays");
+      if (uniqueLookbacks.length > 0) {
+        if (!uniqueLookbacks.includes(currentFormLookback)) {
+          form.setValue("lookbackDays", uniqueLookbacks[0], { shouldValidate: true });
+          // Dependent fields will be cleared by the auto-fill effect if lookback changes
+        }
+      } else {
+        // No lookback options for this metric/realestate combo, reset to default or clear
+        form.setValue("lookbackDays", DEFAULT_LOOKBACK_DAYS); // Or consider NaN and let validation handle it
+        form.setValue("mean", NaN);
+        form.setValue("variance", NaN);
+        form.setValue("numberOfUsers", NaN);
+        setIsDataFromExcel(false);
+        onResults(null);
+        toast({ title: "No lookback periods found", description: `No lookback data in Excel for ${selectedMetric} on ${selectedRealEstate}. Input manually.`, variant: "default"});
+      }
+    } else {
+      setAvailableLookbackDays([]);
+      if (selectedInputType !== "excelData") {
+        setIsDataFromExcel(false); // Ensure this is reset if not in excel mode
+      }
+    }
+  }, [selectedInputType, selectedMetric, selectedRealEstate, parsedExcelData, form, toast, onResults]);
+
+
+  // Effect to auto-fill data from Excel based on Metric, Real Estate, AND LookbackDays
+  useEffect(() => {
+    if (selectedInputType === "excelData" && parsedExcelData && selectedMetric && selectedRealEstate && !isNaN(currentLookbackDays)) {
+      const metricKey = 'metric';
+      const realEstateKey = 'realestate';
+      const lookbackKeyExcel = 'lookbackdays';
+      const meanKey = 'mean';
+      const varianceKey = 'variance';
+      const usersKey = 'totalusers'; // Simplified from 'total users' or 'numberofusers'
+
+      const matchedRow = parsedExcelData.find(row => {
+        const rowMetric = row[metricKey];
+        const rowRealEstate = row[realEstateKey];
+        const rowLookback = row[lookbackKeyExcel];
+        return typeof rowMetric === 'string' && typeof rowRealEstate === 'string' && typeof rowLookback === 'number' &&
+               rowMetric.toLowerCase() === selectedMetric.toLowerCase() &&
+               rowRealEstate.toLowerCase() === selectedRealEstate.toLowerCase() &&
+               rowLookback === currentLookbackDays;
+      });
+
       if (matchedRow) {
         const meanVal = parseFloat(String(matchedRow[meanKey]));
         const varianceVal = parseFloat(String(matchedRow[varianceKey]));
-        
-        let usersVal = NaN;
-        if (matchedRow[usersKey] !== undefined) usersVal = parseInt(String(matchedRow[usersKey]), 10);
-        else if (matchedRow[usersKeyAlt1] !== undefined) usersVal = parseInt(String(matchedRow[usersKeyAlt1]), 10);
-        else if (matchedRow[usersKeyAlt2] !== undefined) usersVal = parseInt(String(matchedRow[usersKeyAlt2]), 10);
-        
-        let lookbackVal = NaN;
-        if (matchedRow[lookbackKey] !== undefined) lookbackVal = parseInt(String(matchedRow[lookbackKey]), 10);
-        else if (matchedRow[lookbackKeyAlt1] !== undefined) lookbackVal = parseInt(String(matchedRow[lookbackKeyAlt1]), 10);
-
+        const usersVal = parseInt(String(matchedRow[usersKey]), 10);
 
         form.setValue("mean", isNaN(meanVal) ? NaN : meanVal, { shouldValidate: true });
         form.setValue("variance", isNaN(varianceVal) ? NaN : varianceVal, { shouldValidate: true });
         form.setValue("numberOfUsers", isNaN(usersVal) ? NaN : usersVal, { shouldValidate: true });
-        form.setValue("lookbackDays", isNaN(lookbackVal) ? DEFAULT_LOOKBACK_DAYS : lookbackVal, { shouldValidate: true });
-        toast({ title: "Data auto-filled from Excel", description: `Values for ${selectedMetric} on ${selectedRealEstate} applied.`, variant: "default" });
+        // lookbackDays is already set by its own dropdown or previous logic
+        setIsDataFromExcel(true);
+        onResults(null);
+        toast({ title: "Data auto-filled from Excel", description: `Values for ${selectedMetric} on ${selectedRealEstate} for ${currentLookbackDays} days lookback applied.`, variant: "default" });
       } else {
-        // Optionally clear fields or notify user if no match
         form.setValue("mean", NaN);
         form.setValue("variance", NaN);
         form.setValue("numberOfUsers", NaN);
-        form.setValue("lookbackDays", DEFAULT_LOOKBACK_DAYS);
-        toast({ title: "No matching data in Excel", description: `No row found for ${selectedMetric} on ${selectedRealEstate}. Please input manually or check file.`, variant: "default" });
+        setIsDataFromExcel(false);
+        onResults(null);
+        toast({ title: "No matching data in Excel", description: `No row found for ${selectedMetric} on ${selectedRealEstate} with ${currentLookbackDays} days lookback. Input manually.`, variant: "default" });
       }
     } else if (selectedInputType !== "excelData") {
-        // If not excelData, potentially clear parsedExcelData or reset fields if needed,
-        // but current defaultValues handle NaN which is fine for manual input.
-        // setParsedExcelData(null); //  Consider if this is desired UX
-        // setUploadedFileName(null);
+        setIsDataFromExcel(false);
+        // Potentially reset fields if switching away from excelData and they were auto-filled
+        // form.setValue("mean", NaN);
+        // form.setValue("variance", NaN);
+        // form.setValue("numberOfUsers", NaN);
+        // form.setValue("lookbackDays", DEFAULT_LOOKBACK_DAYS);
     }
-  }, [selectedInputType, selectedMetric, selectedRealEstate, parsedExcelData, form, toast]);
+  }, [selectedInputType, selectedMetric, selectedRealEstate, currentLookbackDays, parsedExcelData, form, toast, onResults]);
 
 
   async function onSubmit(values: MdeToSampleSizeFormValues) {
     setIsLoading(true);
     onResults(null); 
     try {
-      const result = await calculateSampleSizeAction(values); // Pass MdeToSampleSizeFormValues type
+      const result = await calculateSampleSizeAction(values);
       onResults(result);
 
       if (result.requiredSampleSize !== undefined || (result.warnings && result.warnings.length > 0) ) {
@@ -209,12 +252,14 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       setIsLoading(false);
     }
   }
+  
+  const isHistoricalDataReadOnly = selectedInputType === "excelData" && isDataFromExcel;
 
   return (
     <Card className="w-full shadow-lg">
       <CardHeader>
         <CardTitle className="font-headline text-2xl">MDE to Sample Size Inputs</CardTitle>
-        <p className="text-muted-foreground">Enter your desired MDE and other parameters to calculate the required sample size. You can manually input data or upload an Excel/CSV file to auto-fill common parameters.</p>
+        <p className="text-muted-foreground">Enter desired MDE. For historical data (Mean, Variance, Traffic), you can manually input or upload an Excel/CSV file to auto-fill.</p>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -226,7 +271,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Metric</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); onResults(null); }} defaultValue={field.value}>
+                    <Select onValueChange={(value) => { field.onChange(value); onResults(null); setIsDataFromExcel(false); }} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger><SelectValue placeholder="Select a metric" /></SelectTrigger>
                       </FormControl>
@@ -244,7 +289,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Real Estate</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); onResults(null);}} defaultValue={field.value}>
+                    <Select onValueChange={(value) => { field.onChange(value); onResults(null); setIsDataFromExcel(false);}} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger><SelectValue placeholder="Select real estate" /></SelectTrigger>
                       </FormControl>
@@ -263,15 +308,21 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
               name="inputType"
               render={({ field }) => (
                 <FormItem className="space-y-3">
-                  <FormLabel>Data Input Method</FormLabel>
+                  <FormLabel>Historical Data Input Method</FormLabel>
                   <FormControl>
                     <RadioGroup
                       onValueChange={(value) => { 
                         field.onChange(value); 
                         onResults(null); 
+                        setIsDataFromExcel(false);
                         if (value !== 'excelData') { 
                             setParsedExcelData(null); 
                             setUploadedFileName(null);
+                            setAvailableLookbackDays([]);
+                            form.setValue("mean", NaN);
+                            form.setValue("variance", NaN);
+                            form.setValue("numberOfUsers", NaN);
+                            form.setValue("lookbackDays", DEFAULT_LOOKBACK_DAYS);
                             const fileInput = document.getElementById('excel-upload') as HTMLInputElement;
                             if (fileInput) fileInput.value = '';
                         }
@@ -279,14 +330,6 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                       defaultValue={field.value}
                       className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4"
                     >
-                      <FormItem className="flex items-center space-x-3 space-y-0">
-                        <FormControl>
-                          <RadioGroupItem value="platformDefault" disabled />
-                        </FormControl>
-                        <FormLabel className="font-normal text-muted-foreground">
-                          Platform Default (soon)
-                        </FormLabel>
-                      </FormItem>
                       <FormItem className="flex items-center space-x-3 space-y-0">
                         <FormControl>
                           <RadioGroupItem value="customData" />
@@ -312,34 +355,71 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
 
             {selectedInputType === "excelData" && (
               <div className="space-y-3 p-4 border rounded-md bg-muted/30">
-                <FormLabel htmlFor="excel-upload" className="flex items-center gap-2 cursor-pointer">
-                    <FileUp className="h-5 w-5 text-primary"/> Upload Excel/CSV File
-                </FormLabel>
-                <Input 
-                    id="excel-upload" 
-                    type="file" 
-                    accept=".xlsx, .xls, .csv" 
-                    onChange={handleFileUpload} 
-                    className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                />
-                {uploadedFileName && (
-                    <div className={cn("text-xs flex items-center mt-1", parsedExcelData ? "text-green-600" : "text-destructive")}>
-                        {parsedExcelData ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
-                        {uploadedFileName} {parsedExcelData ? `(${parsedExcelData.length} rows parsed)`: "(Parsing failed or no data)"}
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                    <div>
+                        <FormLabel htmlFor="excel-upload" className="flex items-center gap-2 cursor-pointer mb-1 text-sm font-medium">
+                            <FileUp className="h-5 w-5 text-primary"/> Upload Excel/CSV File
+                        </FormLabel>
+                        <Input 
+                            id="excel-upload" 
+                            type="file" 
+                            accept=".xlsx, .xls, .csv" 
+                            onChange={handleFileUpload} 
+                            className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                        />
+                        {uploadedFileName && (
+                            <div className={cn("text-xs flex items-center mt-1", parsedExcelData ? "text-green-600" : "text-destructive")}>
+                                {parsedExcelData ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                                {uploadedFileName} {parsedExcelData ? `(${parsedExcelData.length} rows parsed)`: "(Parsing failed or no data)"}
+                            </div>
+                        )}
                     </div>
-                )}
-                <FormDescription className="text-xs">
-                  Expected columns (case-insensitive): Metric, Real Estate, Mean, Variance, Total Users, Lookback Days.
-                  Data for selected Metric & Real Estate will auto-fill below.
+                    {parsedExcelData && availableLookbackDays.length > 0 && (
+                        <FormField
+                            control={form.control}
+                            name="lookbackDays" // This will set the main lookbackDays field
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Select Lookback Period (from Excel)</FormLabel>
+                                <Select
+                                onValueChange={(value) => {
+                                    field.onChange(parseInt(value, 10));
+                                    onResults(null);
+                                    setIsDataFromExcel(false); // Will be set true by effect if match found
+                                }}
+                                value={String(field.value)} // Ensure value is string for Select
+                                >
+                                <FormControl>
+                                    <SelectTrigger>
+                                    <SelectValue placeholder="Select lookback days" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {availableLookbackDays.map(days => (
+                                    <SelectItem key={days} value={String(days)}>
+                                        {days} days
+                                    </SelectItem>
+                                    ))}
+                                </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                    )}
+                </div>
+                <FormDescription className="text-xs mt-2">
+                  Expected columns (case-insensitive): Metric, RealEstate, LookbackDays, Mean, Variance, TotalUsers.
+                  Data for selected Metric, Real Estate & Lookback Period will auto-fill below.
                 </FormDescription>
               </div>
             )}
             
             <Separator />
             <p className="text-sm text-muted-foreground">
-              {selectedInputType === 'excelData' && parsedExcelData ? 
-                'Data below may be auto-filled from your Excel. You can override if needed.' : 
-                'Enter custom data below. For daily traffic estimation, provide total users over the lookback period.'
+              {selectedInputType === 'excelData' ? 
+                (isDataFromExcel ? 'Historical data below is auto-filled from your Excel and is read-only.' : 'Select Metric, Real Estate, and Lookback Period to auto-fill from Excel, or input manually if no match.') :
+                'Enter historical data and desired MDE below.'
               }
             </p>
 
@@ -365,8 +445,9 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Mean (Historical)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 0.15 for 15% CR" {...field} onChange={(e) => {field.onChange(e); onResults(null);}} step="any"/>
+                      <Input type="number" placeholder="e.g., 0.15" {...field} onChange={(e) => {field.onChange(e); onResults(null);}} step="any" readOnly={isHistoricalDataReadOnly} />
                     </FormControl>
+                    {isHistoricalDataReadOnly && <FormDescription className="text-xs text-primary">Value from Excel</FormDescription>}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -378,8 +459,9 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Variance (Historical)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 0.1275" {...field} onChange={(e) => {field.onChange(e); onResults(null);}} step="any"/>
+                      <Input type="number" placeholder="e.g., 0.1275" {...field} onChange={(e) => {field.onChange(e); onResults(null);}} step="any" readOnly={isHistoricalDataReadOnly} />
                     </FormControl>
+                    {isHistoricalDataReadOnly && <FormDescription className="text-xs text-primary">Value from Excel</FormDescription>}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -391,8 +473,9 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Total Users (in Lookback)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 100000" {...field} onChange={(e) => {field.onChange(e); onResults(null);}}/>
+                      <Input type="number" placeholder="e.g., 100000" {...field} onChange={(e) => {field.onChange(e); onResults(null);}} readOnly={isHistoricalDataReadOnly} />
                     </FormControl>
+                     {isHistoricalDataReadOnly && <FormDescription className="text-xs text-primary">Value from Excel</FormDescription>}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -404,9 +487,19 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Lookback Days</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 30" {...field} onChange={(e) => {field.onChange(e); onResults(null);}}/>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 30" 
+                        {...field} 
+                        onChange={(e) => {field.onChange(e); onResults(null); if (selectedInputType === 'excelData') setIsDataFromExcel(false);}} 
+                        readOnly={selectedInputType === 'excelData' && availableLookbackDays.length > 0} // Read-only if excel mode and options available
+                      />
                     </FormControl>
-                     <FormDescription>Used to calculate daily traffic from Total Users.</FormDescription>
+                     <FormDescription>
+                        {selectedInputType === 'excelData' && availableLookbackDays.length > 0 
+                            ? "Selected from Excel. Used to calculate daily traffic." 
+                            : "Used to calculate daily traffic from Total Users."}
+                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -453,7 +546,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                 Calculate Sample Size
               </Button>
               {currentResults && (currentResults.requiredSampleSize !== undefined || (currentResults.warnings && currentResults.warnings.length > 0)) && (
-                 <Button type="button" variant="outline" onClick={() => onDownload(currentResults)} className="w-full sm:w-auto">
+                 <Button type="button" variant="outline" onClick={() => currentResults && onDownload(currentResults)} className="w-full sm:w-auto">
                     <Download className="mr-2 h-4 w-4" /> Download Report
                  </Button>
               )}
@@ -561,3 +654,4 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
     </Card>
   );
 }
+
