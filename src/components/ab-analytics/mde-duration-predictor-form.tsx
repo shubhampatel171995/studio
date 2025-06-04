@@ -223,12 +223,12 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
         const uniqueWarnings = Array.from(new Set(calculationWarnings));
         const warningSummary = uniqueWarnings.slice(0, 2).join('; ') + (uniqueWarnings.length > 2 ? '...' : '');
         toast({ 
-            title: "Duration Prediction Complete with Notices", 
+            title: "Duration Calculation Complete with Notices", 
             description: `Some calculations had issues or missing data: ${warningSummary}. Full details in the downloaded report.`,
             duration: 7000,
         });
     } else {
-        toast({ title: "Duration Prediction Complete", description: "Results table updated below." });
+        toast({ title: "Duration Calculation Complete", description: "Results table updated below." });
     }
   }
   
@@ -316,11 +316,7 @@ export function MdeDurationPredictorForm({ onResults, currentResults }: MdeDurat
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               <Separator />
               <p className="text-sm font-medium text-foreground">Experiment Configuration</p>
-              <p className="text-xs text-muted-foreground -mt-6">
-                This calculator relies on data uploaded via "Upload & Map Data". Ensure your file contains entries for 7, 14, 21, and 30 day lookback periods for the selected Metric & Real Estate.
-                {uploadedFileName && <span className="block mt-1">Currently using: <strong>{uploadedFileName}</strong></span>}
-                {!uploadedFileName && <span className="block mt-1 text-destructive"><strong>No data file uploaded. Please upload data via the main page.</strong></span>}
-              </p>
+              
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <FormField control={form.control} name="metric" render={({ field }) => (
                   <FormItem>
@@ -449,3 +445,4 @@ export function MdeDurationPredictorResultsDisplay({ results }: MdeDurationPredi
     </Card>
   );
 }
+
