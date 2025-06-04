@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   ManualCalculatorFormSchema, 
   type ManualCalculatorFormValues, 
-  type MdeToSampleSizeCalculationResults // Re-use for results structure
+  type MdeToSampleSizeCalculationResults 
 } from "@/lib/types";
 import { calculateSampleSizeAction } from "@/actions/ab-analytics-actions";
 import { useState, useEffect } from "react";
@@ -31,9 +31,9 @@ import {
     DEFAULT_STATISTICAL_POWER, 
     DEFAULT_SIGNIFICANCE_LEVEL, 
     METRIC_TYPE_OPTIONS,
-    DURATION_OPTIONS_WEEKS, // For results table
 } from "@/lib/constants";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+// Table related imports are removed
+// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { downloadManualCalculatorReport } from "@/components/ab-analytics/report-download";
 
@@ -51,7 +51,7 @@ export function ManualCalculatorForm() {
       variance: NaN, 
       minimumDetectableEffect: DEFAULT_MDE_PERCENT,
       historicalDailyTraffic: NaN,
-      targetExperimentDurationDays: 14, // Default to 2 weeks
+      targetExperimentDurationDays: 14, 
       statisticalPower: DEFAULT_STATISTICAL_POWER,
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
     },
@@ -63,8 +63,6 @@ export function ManualCalculatorForm() {
   useEffect(() => {
     if (metricType === "Binary" && !isNaN(mean) && mean >= 0 && mean <= 1) {
       const calculatedVariance = mean * (1 - mean);
-      // Set variance only if it's different or not yet set by user, to allow override
-      // This check is tricky; for now, always set if binary and mean is valid, user can edit.
       form.setValue("variance", parseFloat(calculatedVariance.toFixed(6)), { shouldValidate: true });
     }
   }, [metricType, mean, form]);
@@ -73,40 +71,33 @@ export function ManualCalculatorForm() {
     setIsLoading(true);
     setResults(null); 
     try {
-      // Adapt inputs for the existing calculateSampleSizeAction
       const actionInput = {
-        metric: `Manual - ${values.metricType}`, // Provide a generic metric name
+        metric: `Manual - ${values.metricType}`, 
+        metricType: values.metricType,
         mean: values.mean,
         variance: values.variance,
-        minimumDetectableEffect: values.minimumDetectableEffect, // Action expects percentage
+        minimumDetectableEffect: values.minimumDetectableEffect, 
         statisticalPower: values.statisticalPower,
         significanceLevel: values.significanceLevel,
-        historicalDailyTraffic: values.historicalDailyTraffic, // Pass directly
-        // These are not strictly needed by action if historicalDailyTraffic is given, but schema expects them
-        // So we provide defaults or placeholders.
-        numberOfUsers: values.historicalDailyTraffic * (values.targetExperimentDurationDays || 14), // Dummy value for schema
-        lookbackDays: (values.targetExperimentDurationDays || 14), // Dummy value for schema
-        realEstate: "Manual Input", // Provide generic real estate
-        inputType: "customData" as "customData", // Indicate it's not excel based for the action
+        historicalDailyTraffic: values.historicalDailyTraffic, 
+        targetExperimentDurationDays: values.targetExperimentDurationDays,
+        lookbackDays: values.targetExperimentDurationDays, 
+        realEstate: "Manual Input", 
       };
 
       const result = await calculateSampleSizeAction(actionInput);
       
-      // Augment results with manual form specific inputs for reporting
       const augmentedResult: MdeToSampleSizeCalculationResults = {
         ...result,
-        // Overwrite with actual inputs from manual form for the report
         metric: `Manual - ${values.metricType}`,
+        metricType: values.metricType,
         mean: values.mean,
         variance: values.variance,
-        minimumDetectableEffect: values.minimumDetectableEffect / 100, // for consistency in result type (decimal)
+        minimumDetectableEffect: values.minimumDetectableEffect / 100, 
         significanceLevel: values.significanceLevel,
-        // For manual calculator specific fields in report
         historicalDailyTraffic: values.historicalDailyTraffic,
         targetExperimentDurationDays: values.targetExperimentDurationDays,
-        // Fields not directly applicable or derived differently for manual calc, ensure they are present if report expects them
-        numberOfUsers: values.historicalDailyTraffic * (values.targetExperimentDurationDays || 14), // Or how you want to represent this
-        lookbackDays: (values.targetExperimentDurationDays || 14),
+        lookbackDays: values.targetExperimentDurationDays,
         realEstate: "Manual Input",
       };
       
@@ -115,13 +106,13 @@ export function ManualCalculatorForm() {
       if (result.requiredSampleSize !== undefined && result.requiredSampleSize > 0) {
         toast({
             title: "Calculation Complete",
-            description: "Required sample size and duration estimates calculated.",
+            description: "Required sample size and exposure calculated.",
         });
       } else if (result.warnings && result.warnings.length > 0) {
         toast({
             title: "Calculation Notice",
-            description: result.warnings.join(' ') || "Could not fully determine sample size. See notices for details.",
-            variant: "default", // Use "default" for warnings-only, "destructive" for failures
+            description: result.warnings.join(' ').replace(/_/g, ' ') || "Could not fully determine sample size. See notices for details.",
+            variant: "default", 
         });
       } else {
          toast({
@@ -146,10 +137,9 @@ export function ManualCalculatorForm() {
   
   const handleDownloadReport = () => {
     if (results) {
-      // Ensure results passed to download function include specific manual inputs
       const reportData = {
           ...results,
-          metricType: form.getValues("metricType"), // Add metricType from form
+          metricType: form.getValues("metricType"), 
           targetExperimentDurationDays: form.getValues("targetExperimentDurationDays"),
           historicalDailyTraffic: form.getValues("historicalDailyTraffic"),
       };
@@ -174,7 +164,7 @@ export function ManualCalculatorForm() {
                 render={({ field }) => (
                 <FormItem>
                     <FormLabel>Metric Type</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); setResults(null); }} defaultValue={field.value}>
+                    <Select onValueChange={(value) => { field.onChange(value); setResults(null); form.setValue('variance', NaN); }} defaultValue={field.value}>
                     <FormControl>
                         <SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger>
                     </FormControl>
@@ -329,7 +319,7 @@ interface ManualCalculatorResultsDisplayProps {
 }
 
 export function ManualCalculatorResultsDisplay({ results, targetDurationDays }: ManualCalculatorResultsDisplayProps) {
-  const dailyUsers = results.historicalDailyTraffic || 0; // Use direct daily traffic from manual input
+  const dailyUsers = results.historicalDailyTraffic || 0; 
   
   const shouldShowCard = results.requiredSampleSize !== undefined || (results.warnings && results.warnings.length > 0);
 
@@ -337,10 +327,14 @@ export function ManualCalculatorResultsDisplay({ results, targetDurationDays }: 
      return null; 
   }
 
-  let targetDurationInfo: { usersAvailable?: number; isSufficient?: boolean } = {};
+  let targetDurationInfo: { usersAvailable?: number; isSufficient?: boolean, exposureNeeded?: number } = {};
   if (targetDurationDays && dailyUsers > 0 && results.requiredSampleSize && results.requiredSampleSize > 0) {
+    const totalRequiredForExposure = results.requiredSampleSize * 2;
     targetDurationInfo.usersAvailable = dailyUsers * targetDurationDays;
-    targetDurationInfo.isSufficient = targetDurationInfo.usersAvailable >= results.requiredSampleSize * 2;
+    targetDurationInfo.isSufficient = targetDurationInfo.usersAvailable >= totalRequiredForExposure;
+    if(targetDurationInfo.usersAvailable > 0) {
+        targetDurationInfo.exposureNeeded = (totalRequiredForExposure / targetDurationInfo.usersAvailable) * 100;
+    }
   }
 
   return (
@@ -353,11 +347,20 @@ export function ManualCalculatorResultsDisplay({ results, targetDurationDays }: 
             <p className="text-muted-foreground text-center py-8">Please run the calculation with valid inputs.</p>
         )}
         {results.requiredSampleSize !== undefined && results.requiredSampleSize > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-sm mb-6">
             <div>
                 <p className="font-medium text-muted-foreground">Required Sample Size (per variant)</p>
                 <p className="text-2xl font-semibold text-primary">{results.requiredSampleSize?.toLocaleString() || 'N/A'}</p>
             </div>
+             {results.exposureNeededPercentage !== undefined && results.targetExperimentDurationDays && dailyUsers > 0 && (
+                <div>
+                    <p className="font-medium text-muted-foreground">Exposure Needed for {results.targetExperimentDurationDays} days</p>
+                    <p className="text-2xl font-semibold text-accent">
+                        {results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? `${results.exposureNeededPercentage.toFixed(1)}%` : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A'}
+                    </p>
+                     <p className="text-xs text-muted-foreground">(Based on ~{Math.round(dailyUsers).toLocaleString()} daily users)</p>
+                </div>
+            )}
             <div>
                 <p className="font-medium text-muted-foreground">Confidence Level</p>
                 <p className="text-lg text-accent">{(results.confidenceLevel && results.confidenceLevel * 100)?.toFixed(0) || 'N/A'}%</p>
@@ -369,44 +372,18 @@ export function ManualCalculatorResultsDisplay({ results, targetDurationDays }: 
             </div>
         )}
         
-        {dailyUsers > 0 && results.durationEstimates && results.durationEstimates.length > 0 && results.requiredSampleSize !== undefined && results.requiredSampleSize > 0 && (
-          <div className="mt-4">
-            <h3 className="font-medium text-lg mb-2">Duration vs. Traffic Availability</h3>
-            <p className="text-sm text-muted-foreground mb-1">
-              Based on historical daily traffic of ~{Math.round(dailyUsers).toLocaleString()} users:
-            </p>
-            {targetDurationDays && targetDurationInfo.usersAvailable !== undefined && (
-                <p className={cn("text-sm mb-3 p-2 rounded-md", 
-                                 targetDurationInfo.isSufficient ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
-                    For your target duration of <strong>{targetDurationDays} days</strong>, you would have an estimated <strong>{Math.round(targetDurationInfo.usersAvailable).toLocaleString()} users</strong>. 
-                    This is {targetDurationInfo.isSufficient ? <strong className="font-semibold">sufficient</strong> : <strong className="font-semibold">not sufficient</strong>} for the required sample size.
-                </p>
+        {/* Duration vs. Traffic Availability Table Removed */}
+         {targetDurationDays && dailyUsers > 0 && results.requiredSampleSize && results.requiredSampleSize > 0 && targetDurationInfo.usersAvailable !== undefined && (
+                <div className={cn("text-sm mb-3 p-3 rounded-md shadow", 
+                                 targetDurationInfo.isSufficient ? "bg-green-100 text-green-800 border border-green-200" : "bg-red-100 text-red-800 border border-red-200")}>
+                    <h4 className="font-semibold mb-1">For your Target Duration of {targetDurationDays} days:</h4>
+                    <p>Estimated total available users: <strong>{Math.round(targetDurationInfo.usersAvailable).toLocaleString()}</strong>.</p>
+                    <p>This is {targetDurationInfo.isSufficient ? <strong className="font-semibold">sufficient</strong> : <strong className="font-semibold">not sufficient</strong>} for the total required sample size of {(results.requiredSampleSize * 2).toLocaleString()}.</p>
+                    {targetDurationInfo.exposureNeeded !== undefined && (
+                        <p>Required exposure of daily traffic: <strong>{targetDurationInfo.exposureNeeded >=0 && targetDurationInfo.exposureNeeded <= 1000 ? `${targetDurationInfo.exposureNeeded.toFixed(1)}%` : targetDurationInfo.exposureNeeded > 1000 ? '>1000%' : 'N/A'}</strong>.</p>
+                    )}
+                </div>
             )}
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Duration (Weeks)</TableHead>
-                  <TableHead>Total Users Available (Est.)</TableHead>
-                  <TableHead>Sufficient for Test?</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {results.durationEstimates.map((row) => (
-                  <TableRow key={row.weeks}>
-                    <TableCell>{row.weeks}</TableCell>
-                    <TableCell>{Math.round(row.totalUsersAvailable).toLocaleString()}</TableCell>
-                    <TableCell className={row.isSufficient ? 'text-green-600 font-semibold' : 'text-destructive font-semibold'}>
-                      {row.isSufficient ? 'Yes' : 'No'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-             <p className="text-xs text-muted-foreground mt-2">
-              "Total Users Available" is for both variants. "Sufficient for Test?" checks if this is enough for the "Required Sample Size (per variant)" x 2.
-            </p>
-          </div>
-        )}
 
 
         {results.warnings && results.warnings.length > 0 && (

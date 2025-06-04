@@ -12,13 +12,13 @@ export function downloadMdeToSampleSizeReport(results: MdeToSampleSizeCalculatio
   reportContent += `- Metric: ${results.metric || 'N/A'}\n`;
   reportContent += `- Metric Type: ${results.metricType || 'N/A'}\n`;
   reportContent += `- Real Estate: ${results.realEstate || 'N/A'}\n`;
-  if (results.lookbackDays) { // This 'lookbackDays' is the one derived from targetExperimentDuration when Excel is used
+  if (results.lookbackDays) { 
     reportContent += `- Historical Data Lookback Used (based on Target Duration): ${formatNumber(results.lookbackDays)} days\n`;
   }
   reportContent += `- Target MDE: ${formatNumber(results.minimumDetectableEffect ? results.minimumDetectableEffect * 100 : null, 2, '%')}\n`;
   reportContent += `- Target Experiment Duration: ${formatNumber(results.targetExperimentDurationDays)} days\n`;
-  reportContent += `- Mean (Historical, for selected lookback): ${formatNumber(results.mean, 4)}\n`;
-  reportContent += `- Variance (Historical, for selected lookback): ${formatNumber(results.variance, 6)}\n`;
+  reportContent += `- Mean (Historical, for selected lookback/duration): ${formatNumber(results.mean, 4)}\n`;
+  reportContent += `- Variance (Historical, for selected lookback/duration): ${formatNumber(results.variance, 6)}\n`;
   if (results.historicalDailyTraffic !== undefined) {
     reportContent += `- Historical Daily Traffic (derived/input, used for calc): ~${formatNumber(results.historicalDailyTraffic, 0)} users/day\n`;
   }
@@ -37,15 +37,7 @@ export function downloadMdeToSampleSizeReport(results: MdeToSampleSizeCalculatio
   }
   reportContent += `- Confidence Level: ${formatNumber(results.confidenceLevel ? results.confidenceLevel * 100 : null, 0, '%')}\n\n`;
 
-  if (results.durationEstimates && results.durationEstimates.length > 0 && results.historicalDailyTraffic && results.historicalDailyTraffic > 0) {
-    reportContent += `Duration vs. Traffic Availability (Estimated Daily Traffic: ~${formatNumber(results.historicalDailyTraffic,0)} users, assuming 100% exposure):\n`;
-    reportContent += "Weeks | Total Users Available (Est.) | Sufficient for Test?\n";
-    reportContent += "------|------------------------------|---------------------\n";
-    results.durationEstimates.forEach(row => {
-      reportContent += `${formatNumber(row.weeks).padEnd(5)} | ${formatNumber(row.totalUsersAvailable).padEnd(28)} | ${row.isSufficient ? 'Yes' : 'No'}\n`;
-    });
-    reportContent += "\n";
-  }
+  // Duration vs. Traffic Availability Table Removed
 
   if (results.warnings && results.warnings.length > 0) {
     reportContent += "Notices from Calculation:\n";
@@ -106,7 +98,7 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
   reportContent += `- Metric Type: ${results.metricType || (results.metric?.split(' - ')[1] || 'N/A')}\n`;
   reportContent += `- Target MDE: ${formatNumber(results.minimumDetectableEffect ? results.minimumDetectableEffect * 100 : null, 2, '%')}\n`;
   reportContent += `- Mean (Baseline): ${formatNumber(results.mean, 4)}\n`;
-  reportContent += `- Variance: ${formatNumber(results.variance, 6)}\n`; // Higher precision for variance if p*(1-p)
+  reportContent += `- Variance: ${formatNumber(results.variance, 6)}\n`; 
   reportContent += `- Historical Daily Traffic: ${formatNumber(results.historicalDailyTraffic, 0)}\n`;
   if (results.targetExperimentDurationDays !== undefined) {
     reportContent += `- Target Experiment Duration: ${formatNumber(results.targetExperimentDurationDays, 0)} days\n`;
@@ -126,15 +118,7 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
   }
   reportContent += `- Confidence Level: ${formatNumber(results.confidenceLevel ? results.confidenceLevel * 100 : null, 0, '%')}\n\n`;
 
-  if (results.durationEstimates && results.durationEstimates.length > 0 && results.historicalDailyTraffic && results.historicalDailyTraffic > 0) {
-    reportContent += `Duration vs. Traffic Availability (Based on ${formatNumber(results.historicalDailyTraffic,0)} daily users, assuming 100% exposure):\n`;
-    reportContent += "Weeks | Total Users Available (Est.) | Sufficient for Test?\n";
-    reportContent += "------|------------------------------|---------------------\n";
-    results.durationEstimates.forEach(row => {
-      reportContent += `${formatNumber(row.weeks).padEnd(5)} | ${formatNumber(row.totalUsersAvailable).padEnd(28)} | ${row.isSufficient ? 'Yes' : 'No'}\n`;
-    });
-    reportContent += "\n";
-  }
+  // Duration vs. Traffic Availability Table Removed
 
   if (results.warnings && results.warnings.length > 0) {
     reportContent += "Notices from Calculation:\n";

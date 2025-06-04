@@ -28,8 +28,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { METRIC_OPTIONS as DEFAULT_METRIC_OPTIONS, REAL_ESTATE_OPTIONS as DEFAULT_REAL_ESTATE_OPTIONS, DEFAULT_MDE_PERCENT, DEFAULT_STATISTICAL_POWER, DEFAULT_SIGNIFICANCE_LEVEL, METRIC_TYPE_OPTIONS } from "@/lib/constants";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+// Table related imports are removed as the table is no longer displayed
+// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+// import { cn } from "@/lib/utils";
 
 
 interface MdeToSampleSizeFormProps {
@@ -45,14 +46,14 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
   
   const [availableMetrics, setAvailableMetrics] = useState<string[]>(DEFAULT_METRIC_OPTIONS);
   const [availableRealEstates, setAvailableRealEstates] = useState<string[]>(DEFAULT_REAL_ESTATE_OPTIONS);
-  const [isDataFromExcel, setIsDataFromExcel] = useState(false); // Tracks if current data for mean/var/traffic is from Excel
+  const [isDataFromExcel, setIsDataFromExcel] = useState(false); 
   const { toast } = useToast();
 
   const form = useForm<MdeToSampleSizeFormValues>({
     resolver: zodResolver(MdeToSampleSizeFormSchema),
     defaultValues: {
       metric: '',
-      metricType: METRIC_TYPE_OPTIONS[1], // Default to Continuous
+      metricType: METRIC_TYPE_OPTIONS[1], 
       mean: NaN, 
       variance: NaN, 
       realEstate: '',
@@ -61,7 +62,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
       historicalDailyTraffic: NaN, 
       targetExperimentDurationDays: 14,
-      lookbackDays: 14, // Will be set by targetExperimentDurationDays if excel data used
+      lookbackDays: 14, 
     },
   });
 
@@ -146,18 +147,17 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       const matchedRow = parsedExcelData.find(row => 
         row.metric === selectedMetric &&
         row.realEstate === selectedRealEstate &&
-        row.lookbackDays === targetExperimentDuration // Use target duration to find matching lookback
+        row.lookbackDays === targetExperimentDuration 
       );
 
       if (matchedRow) {
         const meanVal = parseFloat(String(matchedRow.mean));
         const varianceVal = parseFloat(String(matchedRow.variance));
         const usersVal = parseInt(String(matchedRow.totalUsers), 10);
-        const lookbackValForRow = parseInt(String(matchedRow.lookbackDays), 10); // This should be targetExperimentDuration
-
+        
         let dailyTrafficToSet: number | undefined = undefined;
-        if (!isNaN(usersVal) && !isNaN(lookbackValForRow) && lookbackValForRow > 0) {
-          dailyTrafficToSet = usersVal / lookbackValForRow;
+        if (!isNaN(usersVal) && targetExperimentDuration > 0) { // Use targetExperimentDuration for daily traffic calculation
+          dailyTrafficToSet = usersVal / targetExperimentDuration;
         }
 
         if (form.getValues("mean") !== meanVal && !(isNaN(form.getValues("mean")) && isNaN(meanVal))) {
@@ -172,20 +172,19 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             form.setValue("historicalDailyTraffic", parseFloat(dailyTrafficToSet.toFixed(2)), {shouldValidate: true});
             valuesActuallyChangedByAutofill = true;
         }
-        // Set contextual lookbackDays to the targetExperimentDuration, as this is the data slice used
         form.setValue("lookbackDays", targetExperimentDuration, { shouldValidate: true });
         
-        setIsDataFromExcel(true); // Indicate that data is now from Excel for read-only purposes
+        setIsDataFromExcel(true); 
         if (isUserDrivenSelectorChange && valuesActuallyChangedByAutofill) {
             onResults(null); 
             toast({ title: "Data auto-filled from file", description: `Values for ${selectedMetric} on ${selectedRealEstate} for ${targetExperimentDuration} days lookback applied. Daily traffic ~${Math.round(dailyTrafficToSet || 0)}.`, variant: "default" });
         }
-      } else { // No matching row in Excel for the specific targetExperimentDuration
-        if(isDataFromExcel || isUserDrivenSelectorChange){ // If it was from excel OR user changed selectors
+      } else { 
+        if(isDataFromExcel || isUserDrivenSelectorChange){ 
             form.setValue("mean", NaN);
             form.setValue("variance", NaN);
             form.setValue("historicalDailyTraffic", NaN);
-            form.setValue("lookbackDays", targetExperimentDuration); // Still set lookback contextually
+            form.setValue("lookbackDays", targetExperimentDuration); 
             setIsDataFromExcel(false); 
         }
         if (isUserDrivenSelectorChange && parsedExcelData.length > 0) { 
@@ -193,8 +192,8 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
             toast({ title: "No matching historical data for target duration", description: `No data found in file for ${targetExperimentDuration} days lookback for ${selectedMetric} on ${selectedRealEstate}. Input parameters manually.`, variant: "default" });
         }
       }
-    } else if (!parsedExcelData && isUserDrivenSelectorChange) { // No excel file loaded, and user changed selectors
-        if(isDataFromExcel) { // If it *was* from excel, clear fields
+    } else if (!parsedExcelData && isUserDrivenSelectorChange) { 
+        if(isDataFromExcel) { 
             form.setValue("mean", NaN);
             form.setValue("variance", NaN);
             form.setValue("historicalDailyTraffic", NaN);
@@ -211,9 +210,8 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
 
 
   useEffect(() => {
-    // Auto-calculate variance for Binary type if mean is valid and not using Excel data for variance
     if (selectedMetricType === "Binary" && !isNaN(currentMean) && currentMean >= 0 && currentMean <= 1) {
-      if (!isDataFromExcel) { // Only auto-calculate if variance is not being driven by Excel
+      if (!isDataFromExcel) { 
         const calculatedVariance = currentMean * (1 - currentMean);
         form.setValue("variance", parseFloat(calculatedVariance.toFixed(6)), { shouldValidate: true });
       }
@@ -231,7 +229,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
       if (result.requiredSampleSize !== undefined && result.requiredSampleSize > 0) {
         toast({
             title: "Calculation Complete",
-            description: "Required sample size, exposure, and duration estimates calculated.",
+            description: "Required sample size and exposure calculated.",
         });
       } else if (result.warnings && result.warnings.length > 0) {
         toast({
@@ -262,7 +260,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
   }
   
   const isVarianceReadOnlyForBinary = selectedMetricType === "Binary" && !isNaN(currentMean) && currentMean >= 0 && currentMean <= 1 && !isDataFromExcel;
-  const isHistoricalFieldReadOnly = isDataFromExcel; // Mean, Variance, HistoricalDailyTraffic are read-only if from Excel
+  const isHistoricalFieldReadOnly = isDataFromExcel;
 
   return (
     <Card className="w-full shadow-lg">
@@ -335,7 +333,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                 render={({ field }) => (
                 <FormItem>
                     <FormLabel>Metric Type</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); onResults(null); }} value={field.value}>
+                    <Select onValueChange={(value) => { field.onChange(value); onResults(null); setIsDataFromExcel(false); form.setValue('variance', NaN); }} value={field.value}>
                     <FormControl>
                         <SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger>
                     </FormControl>
@@ -390,7 +388,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                     <FormControl>
                       <Input type="number" placeholder="e.g., 14" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} />
                     </FormControl>
-                    <FormDescription>Also used to find matching historical data from file.</FormDescription>
+                    <FormDescription>Drives historical data lookup from file.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -402,7 +400,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Mean (Historical)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder={selectedMetricType === 'Binary' ? "e.g., 0.1 for 10%" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="any" readOnly={isHistoricalFieldReadOnly} />
+                      <Input type="number" placeholder={selectedMetricType === 'Binary' ? "e.g., 0.1 for 10%" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) setIsDataFromExcel(false);}} step="any" readOnly={isHistoricalFieldReadOnly} />
                     </FormControl>
                     {isHistoricalFieldReadOnly && <FormDescription className="text-xs text-primary">Value from file for {targetExperimentDuration} days lookback</FormDescription>}
                     <FormDescription className="text-xs">{selectedMetricType === 'Binary' ? "Proportion (0-1)." : "Average value."}</FormDescription>
@@ -417,9 +415,10 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   <FormItem>
                     <FormLabel>Variance (Historical)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 0.1275" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="any" readOnly={isHistoricalFieldReadOnly || isVarianceReadOnlyForBinary} />
+                      <Input type="number" placeholder="e.g., 0.1275" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) setIsDataFromExcel(false);}} step="any" readOnly={isHistoricalFieldReadOnly || isVarianceReadOnlyForBinary} />
                     </FormControl>
-                    {(isHistoricalFieldReadOnly || isVarianceReadOnlyForBinary) && <FormDescription className="text-xs text-primary">{isVarianceReadOnlyForBinary ? "Auto-calculated (p*(1-p))" : `Value from file for ${targetExperimentDuration} days lookback`}</FormDescription>}
+                    {(isHistoricalFieldReadOnly ) && <FormDescription className="text-xs text-primary">Value from file for {targetExperimentDuration} days lookback</FormDescription>}
+                    {(isVarianceReadOnlyForBinary && !isHistoricalFieldReadOnly) && <FormDescription className="text-xs text-primary">Auto-calculated (p*(1-p))</FormDescription>}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -436,7 +435,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                             placeholder="e.g., 5000" 
                             {...field} 
                             value={isNaN(field.value ?? NaN) ? '' : field.value}
-                            onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}}
+                            onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null); if(isDataFromExcel) setIsDataFromExcel(false);}}
                             readOnly={isHistoricalFieldReadOnly} 
                         />
                         </FormControl>
@@ -556,38 +555,7 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
             </div>
         )}
         
-        {dailyTrafficForDisplay > 0 && results.durationEstimates && results.durationEstimates.length > 0 && results.requiredSampleSize !== undefined && results.requiredSampleSize > 0 && (
-          <div className="mt-4">
-            <h3 className="font-medium text-lg mb-2">Duration vs. Traffic Availability</h3>
-            <p className="text-sm text-muted-foreground mb-3">
-              The table below shows if the required sample size is achievable for different durations, assuming 100% exposure of available daily traffic (~{Math.round(dailyTrafficForDisplay).toLocaleString()} users):
-            </p>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Duration (Weeks)</TableHead>
-                  <TableHead>Total Users Available (Est. at 100% exposure)</TableHead>
-                  <TableHead>Sufficient for Test?</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {results.durationEstimates.map((row) => (
-                  <TableRow key={row.weeks}>
-                    <TableCell>{row.weeks}</TableCell>
-                    <TableCell>{Math.round(row.totalUsersAvailable).toLocaleString()}</TableCell>
-                    <TableCell className={row.isSufficient ? 'text-green-600 font-semibold' : 'text-destructive font-semibold'}>
-                      {row.isSufficient ? 'Yes' : 'No'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-             <p className="text-xs text-muted-foreground mt-2">
-              "Total Users Available" is for both variants. "Sufficient for Test?" checks if this is enough for the "Required Sample Size (per variant)" x 2.
-            </p>
-          </div>
-        )}
-
+        {/* Duration vs. Traffic Availability Table Removed */}
 
         {results.warnings && results.warnings.length > 0 && (
           <div className={`mt-4 ${results.requiredSampleSize === undefined || results.requiredSampleSize <=0 ? '' : 'pt-4 border-t'}`}>
