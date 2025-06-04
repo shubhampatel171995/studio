@@ -39,36 +39,48 @@ export function SampleSizeCalculatorForm({ onResults, onDownload, currentResults
     resolver: zodResolver(SampleSizeFormSchema),
     defaultValues: {
       metric: METRIC_OPTIONS[0],
-      mean: undefined, // User must input
-      variance: undefined, // User must input
+      mean: NaN, 
+      variance: NaN, 
       lookbackDays: DEFAULT_LOOKBACK_DAYS,
       realEstate: REAL_ESTATE_OPTIONS[0],
-      numberOfUsers: undefined, // User must input
+      numberOfUsers: NaN, 
       minimumDetectableEffect: DEFAULT_MDE_PERCENT,
       statisticalPower: DEFAULT_STATISTICAL_POWER,
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
-      inputType: "customData", // Default to custom as platform default is not implemented
+      inputType: "customData", 
     },
   });
 
   async function onSubmit(values: SampleSizeFormValues) {
     setIsLoading(true);
-    onResults(null); // Clear previous results
+    onResults(null); 
     try {
-      // Map form values to CalculateSampleSizeInput for the AI flow
       const inputForAI = {
         metric: values.metric,
         mean: values.mean,
         variance: values.variance,
-        // lookbackDays is not directly in CalculateSampleSizeInput schema, but used for context
         realEstate: values.realEstate,
-        numberOfUsers: values.numberOfUsers, // This is total users over lookback
-        minimumDetectableEffect: values.minimumDetectableEffect / 100, // Convert percentage to decimal for AI
+        numberOfUsers: values.numberOfUsers, 
+        minimumDetectableEffect: values.minimumDetectableEffect / 100, 
         statisticalPower: values.statisticalPower,
         significanceLevel: values.significanceLevel,
       };
       const result = await calculateSampleSizeAction(inputForAI);
-      onResults(result);
+      
+      const resultWithFullInputs = {
+        ...result,
+        // also pass through form inputs that were not part of AI input/output for report
+        metric: values.metric,
+        mean: values.mean,
+        variance: values.variance,
+        lookbackDays: values.lookbackDays,
+        realEstate: values.realEstate,
+        numberOfUsers: values.numberOfUsers,
+        minimumDetectableEffect: values.minimumDetectableEffect / 100,
+        significanceLevel: values.significanceLevel,
+      };
+      onResults(resultWithFullInputs);
+
       toast({
         title: "Calculation Successful",
         description: "Sample size and test duration estimated.",
@@ -297,7 +309,7 @@ export function SampleSizeResultsDisplay({ results }: { results: SampleSizeCalcu
     return null;
   }
 
-  const dailyUsers = results.numberOfUsers && results.lookbackDays ? results.numberOfUsers / results.lookbackDays : 0;
+  const dailyUsers = results.numberOfUsers && results.lookbackDays && results.lookbackDays > 0 ? results.numberOfUsers / results.lookbackDays : 0;
   const trafficSufficient = results.estimatedTestDuration && dailyUsers > 0 && (results.requiredSampleSize / dailyUsers) <= results.estimatedTestDuration;
 
 
@@ -314,7 +326,7 @@ export function SampleSizeResultsDisplay({ results }: { results: SampleSizeCalcu
           </div>
           <div>
             <p className="font-medium text-muted-foreground">Estimated Test Duration</p>
-            <p className="text-2xl font-semibold text-primary">{results.estimatedTestDuration ? `${results.estimatedTestDuration} days` : 'N/A'}</p>
+            <p className="text-2xl font-semibold text-primary">{results.estimatedTestDuration ? `${Math.ceil(results.estimatedTestDuration)} days` : 'N/A'}</p>
           </div>
           <div>
             <p className="font-medium text-muted-foreground">Confidence Level</p>

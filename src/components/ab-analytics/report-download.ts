@@ -1,5 +1,5 @@
 
-import type { SampleSizeCalculationResults, MdeExplorerResults } from '@/lib/types';
+import type { SampleSizeCalculationResults, MdeExplorerFormValues, MdeExplorerResults } from '@/lib/types';
 
 function formatNumber(num: number | undefined | null, precision = 0): string {
   if (num === undefined || num === null || isNaN(num)) return 'N/A';
@@ -16,14 +16,14 @@ export function downloadSampleSizeReport(results: SampleSizeCalculationResults) 
   reportContent += `- Real Estate: ${results.realEstate || 'N/A'}\n`;
   reportContent += `- Number of Users (in Lookback): ${formatNumber(results.numberOfUsers)}\n`;
   reportContent += `- Minimum Detectable Effect (MDE): ${formatNumber(results.minimumDetectableEffect ? results.minimumDetectableEffect * 100 : null, 2)}%\n`;
-  reportContent += `- Statistical Power: ${formatNumber(results.powerLevel ? results.powerLevel * 100 : null, 0)}%\n`;
-  reportContent += `- Significance Level (Alpha): ${formatNumber(results.significanceLevel ? results.significanceLevel * 100 : null, 0)}%\n\n`;
+  reportContent += `- Statistical Power: ${formatNumber(results.powerLevel ? results.powerLevel * 100 : null, 0)}%\n`; // powerLevel is from AI output
+  reportContent += `- Significance Level (Alpha): ${formatNumber(results.significanceLevel ? results.significanceLevel * 100 : null, 0)}%\n\n`; // significanceLevel is from form
   
   reportContent += "Results:\n";
   reportContent += `- Required Sample Size (per variant): ${formatNumber(results.requiredSampleSize)}\n`;
-  reportContent += `- Estimated Test Duration: ${results.estimatedTestDuration ? `${formatNumber(results.estimatedTestDuration)} days` : 'N/A'}\n`;
+  reportContent += `- Estimated Test Duration: ${results.estimatedTestDuration ? `${Math.ceil(results.estimatedTestDuration)} days` : 'N/A'}\n`;
   reportContent += `- Confidence Level: ${formatNumber(results.confidenceLevel ? results.confidenceLevel * 100 : null, 0)}%\n`;
-  reportContent += `- Power Level (same as input): ${formatNumber(results.powerLevel ? results.powerLevel * 100 : null, 0)}%\n\n`;
+  reportContent += `- Power Level (as calculated): ${formatNumber(results.powerLevel ? results.powerLevel * 100 : null, 0)}%\n\n`;
 
   if (results.warnings && results.warnings.length > 0) {
     reportContent += "Warnings:\n";
@@ -43,7 +43,7 @@ export function downloadSampleSizeReport(results: SampleSizeCalculationResults) 
 }
 
 
-export function downloadMdeExplorerReport(input: any, results: MdeExplorerResults) {
+export function downloadMdeExplorerReport(input: MdeExplorerFormValues, results: MdeExplorerResults) {
   let reportContent = "ABalytics - MDE Explorer Report\n\n";
   reportContent += "Inputs:\n";
   reportContent += `- Metric: ${input.metric || 'N/A'}\n`;
@@ -57,12 +57,17 @@ export function downloadMdeExplorerReport(input: any, results: MdeExplorerResult
   reportContent += `- Explored Durations (Weeks): ${input.experimentDurations?.join(', ') || 'N/A'}\n\n`;
 
   reportContent += "Results Table:\n";
-  reportContent += "Weeks | Total Users | Achievable MDE (%) | Confidence (%) | Power (%)\n";
-  reportContent += "------|-------------|--------------------|----------------|----------\n";
-  results.tableData.forEach(row => {
-    reportContent += `${formatNumber(row.weeks).padEnd(5)} | ${formatNumber(row.totalUsers).padEnd(11)} | ${formatNumber(row.achievableMde, 2).padEnd(18)} | ${formatNumber(row.confidence, 0).padEnd(14)} | ${formatNumber(row.power, 0)}\n`;
-  });
-  reportContent += "\n";
+  if (results.tableData.length > 0) {
+    reportContent += "Weeks | Total Users | Achievable MDE (%) | Confidence (%) | Power (%)\n";
+    reportContent += "------|-------------|--------------------|----------------|----------\n";
+    results.tableData.forEach(row => {
+      reportContent += `${formatNumber(row.weeks).padEnd(5)} | ${formatNumber(row.totalUsers).padEnd(11)} | ${formatNumber(row.achievableMde, 2).padEnd(18)} | ${formatNumber(row.confidence, 0).padEnd(14)} | ${formatNumber(row.power, 0)}\n`;
+    });
+    reportContent += "\n";
+  } else {
+    reportContent += "No table data generated for the selected inputs and durations.\n\n"
+  }
+
 
   if (results.warnings && results.warnings.length > 0) {
     reportContent += "Warnings/Notices:\n";

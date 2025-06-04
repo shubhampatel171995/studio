@@ -19,13 +19,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { MdeExplorerFormSchema, type MdeExplorerFormValues, type MdeExplorerResults } from "@/lib/types";
 import { calculateMdeDataAction } from "@/actions/ab-analytics-actions";
 import { useState, useEffect } from "react";
-import { Loader2, AlertTriangle, BarChart2, ListChecks } from "lucide-react";
+import { Loader2, AlertTriangle, BarChart2, ListChecks, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { METRIC_OPTIONS, REAL_ESTATE_OPTIONS, DEFAULT_LOOKBACK_DAYS, DEFAULT_STATISTICAL_POWER, DEFAULT_SIGNIFICANCE_LEVEL } from "@/lib/constants";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ResponsiveContainer, LineChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Line } from 'recharts';
+import { downloadMdeExplorerReport } from '@/components/ab-analytics/report-download';
+
 
 const durationOptions = [
   { id: "1", label: "1 Week" },
@@ -41,6 +43,7 @@ const durationOptions = [
 export function MdeExplorer() {
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<MdeExplorerResults | null>(null);
+  const [formInputs, setFormInputs] = useState<MdeExplorerFormValues | null>(null);
   const { toast } = useToast();
   const [viewMode, setViewMode] = useState<'table' | 'chart'>('chart');
 
@@ -48,27 +51,36 @@ export function MdeExplorer() {
     resolver: zodResolver(MdeExplorerFormSchema),
     defaultValues: {
       metric: METRIC_OPTIONS[0],
-      mean: undefined,
-      variance: undefined,
+      mean: NaN,
+      variance: NaN,
       lookbackDays: DEFAULT_LOOKBACK_DAYS,
       realEstate: REAL_ESTATE_OPTIONS[0],
-      numberOfUsers: undefined,
+      numberOfUsers: NaN,
       statisticalPower: DEFAULT_STATISTICAL_POWER,
       significanceLevel: DEFAULT_SIGNIFICANCE_LEVEL,
-      experimentDurations: [2, 4], // Default selected durations
+      experimentDurations: [2, 4], 
     },
   });
 
   async function onSubmit(values: MdeExplorerFormValues) {
     setIsLoading(true);
     setResults(null);
+    setFormInputs(values); 
     try {
       const MDEData = await calculateMdeDataAction(values);
       setResults(MDEData);
-      toast({
-        title: "MDE Calculation Successful",
-        description: "Achievable MDEs for selected durations calculated.",
-      });
+      if (MDEData.tableData.length > 0 || (MDEData.warnings && MDEData.warnings.length > 0) ) {
+        toast({
+          title: "MDE Calculation Complete",
+          description: MDEData.tableData.length > 0 ? "Achievable MDEs for selected durations calculated." : "Calculation complete with notices.",
+        });
+      } else {
+         toast({
+          variant: "destructive",
+          title: "No Data Calculated",
+          description: "Please check your inputs and try again. No valid MDE could be calculated for the selected durations.",
+        });
+      }
     } catch (error) {
       console.error(error);
       setResults(null);
@@ -82,10 +94,20 @@ export function MdeExplorer() {
     }
   }
   
-  // Effect to handle transitions and animations for chart/table
   useEffect(() => {
-    // Placeholder for potential animation logic on viewMode change or results update
   }, [viewMode, results]);
+
+  const handleDownloadReport = () => {
+    if (results && formInputs) {
+      downloadMdeExplorerReport(formInputs, results);
+    } else {
+       toast({
+        variant: "destructive",
+        title: "Cannot Download Report",
+        description: "Please calculate MDE results first.",
+      });
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -214,11 +236,17 @@ export function MdeExplorer() {
                     <FormItem><FormLabel>Significance Level (α)</FormLabel><FormControl><Input type="number" placeholder="e.g., 0.05" {...field} step="0.01" min="0.01" max="0.99" /></FormControl><FormMessage /></FormItem>
                 )}/>
               </div>
-
-              <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Explore MDE
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Explore MDE
+                </Button>
+                 {results && (results.tableData.length > 0 || (results.warnings && results.warnings.length > 0)) && (
+                    <Button type="button" variant="outline" onClick={handleDownloadReport} className="w-full sm:w-auto">
+                        <Download className="mr-2 h-4 w-4" /> Download Report
+                    </Button>
+                )}
+              </div>
             </form>
           </Form>
         </CardContent>
@@ -229,10 +257,12 @@ export function MdeExplorer() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="font-headline text-2xl">MDE Exploration Results</CardTitle>
-              <div className="flex gap-2">
-                <Button variant={viewMode === 'chart' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('chart')}><BarChart2 className="mr-2 h-4 w-4"/>Chart</Button>
-                <Button variant={viewMode === 'table' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('table')}><ListChecks className="mr-2 h-4 w-4"/>Table</Button>
-              </div>
+              {(results.tableData.length > 0 || (results.chartData && results.chartData.length > 0)) && (
+                <div className="flex gap-2">
+                  <Button variant={viewMode === 'chart' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('chart')}><BarChart2 className="mr-2 h-4 w-4"/>Chart</Button>
+                  <Button variant={viewMode === 'table' ? 'default' : 'outline'} size="sm" onClick={() => setViewMode('table')}><ListChecks className="mr-2 h-4 w-4"/>Table</Button>
+                </div>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -293,8 +323,11 @@ export function MdeExplorer() {
                 </TableBody>
               </Table>
             )}
-
-            {((viewMode === 'table' && (!results.tableData || results.tableData.length === 0)) || (viewMode === 'chart' && (!results.chartData || results.chartData.length === 0))) && !isLoading && (
+            
+            {((viewMode === 'table' && (!results.tableData || results.tableData.length === 0)) || 
+              (viewMode === 'chart' && (!results.chartData || results.chartData.length === 0))) && 
+              !isLoading && 
+              (!results.warnings || results.warnings.length === 0) && (
                 <p className="text-muted-foreground text-center py-8">No data to display. Please run the calculation with valid inputs and selected durations.</p>
             )}
 
@@ -310,3 +343,4 @@ export function MdeExplorer() {
     </div>
   );
 }
+
