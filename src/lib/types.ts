@@ -21,7 +21,6 @@ export const MdeToSampleSizeFormSchema = z.object({
   minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be a positive number").default(DEFAULT_MDE_PERCENT),
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
-  inputType: z.enum(["platformDefault", "customData", "excelData"]).default("customData"), 
   historicalDailyTraffic: z.coerce.number().optional(), // For manual calculator passthrough
 });
 
@@ -138,3 +137,4 @@ export interface ExcelDataRow {
   // Allow other dynamic keys from original file if needed, though not directly used by app logic after mapping
   [key: string]: any; 
 }
+
