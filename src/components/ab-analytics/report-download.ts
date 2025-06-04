@@ -7,20 +7,20 @@ function formatNumber(num: number | undefined | null, precision = 0, suffix = ''
 }
 
 export function downloadMdeToSampleSizeReport(results: MdeToSampleSizeCalculationResults) {
-  let reportContent = "ABalytics - MDE to Sample Size Report (Excel/Platform Data)\n\n";
+  let reportContent = "ABalytics - MDE to Sample Size Report\n\n";
   reportContent += "Inputs:\n";
   reportContent += `- Metric: ${results.metric || 'N/A'}\n`;
   reportContent += `- Metric Type: ${results.metricType || 'N/A'}\n`;
   reportContent += `- Real Estate: ${results.realEstate || 'N/A'}\n`;
-  if (results.lookbackDays) {
-    reportContent += `- Historical Data Lookback (from file selection): ${formatNumber(results.lookbackDays)} days\n`;
+  if (results.lookbackDays) { // This 'lookbackDays' is the one derived from targetExperimentDuration when Excel is used
+    reportContent += `- Historical Data Lookback Used (based on Target Duration): ${formatNumber(results.lookbackDays)} days\n`;
   }
   reportContent += `- Target MDE: ${formatNumber(results.minimumDetectableEffect ? results.minimumDetectableEffect * 100 : null, 2, '%')}\n`;
   reportContent += `- Target Experiment Duration: ${formatNumber(results.targetExperimentDurationDays)} days\n`;
-  reportContent += `- Mean (Historical): ${formatNumber(results.mean, 4)}\n`;
-  reportContent += `- Variance (Historical): ${formatNumber(results.variance, 6)}\n`;
+  reportContent += `- Mean (Historical, for selected lookback): ${formatNumber(results.mean, 4)}\n`;
+  reportContent += `- Variance (Historical, for selected lookback): ${formatNumber(results.variance, 6)}\n`;
   if (results.historicalDailyTraffic !== undefined) {
-    reportContent += `- Historical Daily Traffic (used for calc): ~${formatNumber(results.historicalDailyTraffic, 0)} users/day\n`;
+    reportContent += `- Historical Daily Traffic (derived/input, used for calc): ~${formatNumber(results.historicalDailyTraffic, 0)} users/day\n`;
   }
   reportContent += `- Statistical Power: ${formatNumber(results.powerLevel ? results.powerLevel * 100 : null, 0, '%')}\n`;
   reportContent += `- Significance Level (Alpha): ${formatNumber(results.significanceLevel ? results.significanceLevel * 100 : null, 0, '%')}\n\n`;
@@ -134,15 +134,6 @@ export function downloadManualCalculatorReport(results: MdeToSampleSizeCalculati
       reportContent += `${formatNumber(row.weeks).padEnd(5)} | ${formatNumber(row.totalUsersAvailable).padEnd(28)} | ${row.isSufficient ? 'Yes' : 'No'}\n`;
     });
     reportContent += "\n";
-
-    // This specific check for target duration seems redundant here as exposure % covers it
-    // if (results.targetExperimentDurationDays && results.requiredSampleSize && results.historicalDailyTraffic) {
-    //     const usersInTarget = results.historicalDailyTraffic * results.targetExperimentDurationDays;
-    //     const isSufficientInTarget = usersInTarget >= results.requiredSampleSize * 2;
-    //     reportContent += `For your target duration of ${results.targetExperimentDurationDays} days:\n`;
-    //     reportContent += `- Estimated users available: ${formatNumber(usersInTarget)}\n`;
-    //     reportContent += `- Sufficient for test: ${isSufficientInTarget ? 'Yes' : 'No'}\n\n`;
-    // }
   }
 
   if (results.warnings && results.warnings.length > 0) {

@@ -16,9 +16,9 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
     minimumDetectableEffect, // This is MDE % from form
     statisticalPower, 
     significanceLevel,
-    historicalDailyTraffic, // This is now calculated in the form from Excel or input manually
+    historicalDailyTraffic, 
     targetExperimentDurationDays,
-    lookbackDays, // From excel selection, for context in report
+    lookbackDays, // Contextual: For Excel this is targetExperimentDurationDays, for Manual it's targetExperimentDurationDays. Used for reporting.
   } = formValues;
 
   const localWarnings: string[] = [];
@@ -56,23 +56,23 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
         if (historicalDailyTraffic === undefined || isNaN(historicalDailyTraffic) || historicalDailyTraffic <= 0) {
             localWarnings.push("Historical daily traffic is invalid or missing. Cannot calculate exposure percentage or duration estimates.");
         } else {
-            // Calculate exposure needed
+            // Calculate exposure needed for the target experiment duration
             const totalRequiredSampleSizeForExposure = finalRequiredSampleSize * 2; // Assuming 2 variants
             const totalAvailableTrafficInTargetDuration = historicalDailyTraffic * targetExperimentDurationDays;
 
             if (totalAvailableTrafficInTargetDuration > 0) {
                 exposureNeededPercentage = (totalRequiredSampleSizeForExposure / totalAvailableTrafficInTargetDuration) * 100;
             } else {
-                localWarnings.push("Total available traffic for target duration is zero. Cannot calculate exposure percentage.");
+                localWarnings.push("Total available traffic for target duration is zero or historical daily traffic is too low. Cannot calculate exposure percentage.");
             }
             
-            // Calculate duration estimates table (based on 100% exposure)
+            // Calculate duration estimates table (based on 100% exposure of historical daily traffic)
             durationEstimates = []; 
             const requiredTotalSampleSizeForTable = finalRequiredSampleSize * 2; 
 
             DURATION_OPTIONS_WEEKS.forEach(weeks => {
-                const durationInDays = weeks * 7;
-                const totalUsersAvailable = historicalDailyTraffic * durationInDays;
+                const durationInDaysForTableOption = weeks * 7;
+                const totalUsersAvailable = historicalDailyTraffic * durationInDaysForTableOption;
                 durationEstimates!.push({ 
                     weeks,
                     totalUsersAvailable: Math.round(totalUsersAvailable),
@@ -99,7 +99,7 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
       metricType,
       mean,
       variance,
-      lookbackDays, // For report context
+      lookbackDays: lookbackDays || targetExperimentDurationDays, // For report context, use target duration if lookbackDays wasn't explicitly set (e.g. manual calc)
       realEstate,
       minimumDetectableEffect: minimumDetectableEffect / 100, // MDE as decimal
       significanceLevel,
