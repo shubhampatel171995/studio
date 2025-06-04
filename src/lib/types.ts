@@ -13,16 +13,16 @@ import {
 // Schema for "MDE to Sample Size" flow (Excel/Platform Data Driven)
 export const MdeToSampleSizeFormSchema = z.object({
   metric: z.string().min(1, "Metric is required"),
-  metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }).default(METRIC_TYPE_OPTIONS[1]), // Default to Continuous
+  metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }).default(METRIC_TYPE_OPTIONS[1]),
   mean: z.coerce.number({invalid_type_error: "Mean must be a number"}).refine(val => !isNaN(val), "Mean must be a valid number"),
   variance: z.coerce.number({invalid_type_error: "Variance must be a number"}).nonnegative("Variance must be a non-negative number"),
-  numberOfUsers: z.coerce.number({invalid_type_error: "Number of users must be a number"}).int().positive("Number of users must be a positive integer when provided").optional(), // Optional as it can come from Excel
-  lookbackDays: z.coerce.number().int().positive("Lookback days must be a positive integer").default(DEFAULT_LOOKBACK_DAYS).optional(), // Optional as it can come from Excel
+  lookbackDays: z.coerce.number().int().positive("Lookback days must be a positive integer").default(DEFAULT_LOOKBACK_DAYS).optional(), // From Excel selection or manual
   realEstate: z.string().min(1, "Real Estate is required"),
   minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be a positive number").default(DEFAULT_MDE_PERCENT),
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
-  historicalDailyTraffic: z.coerce.number().optional(), // For manual calculator passthrough
+  historicalDailyTraffic: z.coerce.number({invalid_type_error: "Historical daily traffic must be a number"}).positive("Historical daily traffic must be positive if provided.").optional(), // Calculated from Excel or manual
+  targetExperimentDurationDays: z.coerce.number({invalid_type_error: "Duration must be a number"}).int().positive("Target duration must be a positive integer").default(14),
 }).refine(data => {
     if (data.metricType === "Binary") {
       return data.mean >= 0 && data.mean <= 1;
@@ -48,14 +48,14 @@ export type MdeToSampleSizeFormValues = z.infer<typeof MdeToSampleSizeFormSchema
 // Schema for the new Manual Sample Size Calculator
 export const ManualCalculatorFormSchema = z.object({
   metricType: z.enum([METRIC_TYPE_OPTIONS[0], ...METRIC_TYPE_OPTIONS.slice(1)], { errorMap: () => ({ message: "Metric Type is required" }) }),
-  mean: z.coerce.number({invalid_type_error: "Mean must be a number"}).refine(val => !isNaN(val), "Mean must be a valid number"), // Allow 0 for binary
+  mean: z.coerce.number({invalid_type_error: "Mean must be a number"}).refine(val => !isNaN(val), "Mean must be a valid number"), 
   variance: z.coerce.number({invalid_type_error: "Variance must be a number"}).nonnegative("Variance must be a non-negative number"),
   minimumDetectableEffect: z.coerce.number({invalid_type_error: "MDE must be a number"}).positive("MDE must be a positive number").default(DEFAULT_MDE_PERCENT),
   historicalDailyTraffic: z.coerce.number({invalid_type_error: "Daily traffic must be a number"}).int().positive("Historical daily traffic must be a positive integer"),
   targetExperimentDurationDays: z.coerce.number({invalid_type_error: "Duration must be a number"}).int().positive("Target duration must be a positive integer").default(14),
   statisticalPower: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_STATISTICAL_POWER),
   significanceLevel: z.coerce.number().min(0.01).max(0.99).default(DEFAULT_SIGNIFICANCE_LEVEL),
-}).refine(data => { // Conditional validation for binary metric mean
+}).refine(data => { 
     if (data.metricType === "Binary") {
       return data.mean >= 0 && data.mean <= 1;
     }
@@ -63,7 +63,7 @@ export const ManualCalculatorFormSchema = z.object({
   }, {
     message: "For Binary metrics, Mean (proportion) must be between 0 and 1.",
     path: ["mean"],
-  }).refine(data => { // Conditional validation for mean > 0 for non-binary
+  }).refine(data => { 
     if (data.metricType === "Continuous") { 
         return data.mean > 0;
     }
@@ -91,21 +91,20 @@ export type CalculateAIFlowOutput = CalculateAIFlowOutputInternal;
 // used by both Excel-driven and Manual calculators for displaying results.
 export type MdeToSampleSizeCalculationResults = CalculateAIFlowOutput & {
   // Inputs from form (passed through for reporting and context)
-  metric: string; // Could be "Metric Name - Real Estate" or "Manual - MetricType"
+  metric: string; 
   metricType: typeof METRIC_TYPE_OPTIONS[number];
   mean: number;
   variance: number;
-  numberOfUsers?: number; // May not be relevant for manual calc if historicalDailyTraffic is used
-  lookbackDays?: number;  // May not be relevant for manual calc
-  realEstate?: string; // May not be relevant for manual calc
+  lookbackDays?: number;  // From Excel selection, for context
+  realEstate?: string; 
   minimumDetectableEffect: number; // MDE as decimal for consistency in results
   significanceLevel: number; // Alpha from form
   
-  // Specific to manual calculator results, optional for Excel-based
-  historicalDailyTraffic?: number;
-  targetExperimentDurationDays?: number;
+  historicalDailyTraffic?: number; // Calculated from Excel or from manual form
+  targetExperimentDurationDays: number; // From form
+  exposureNeededPercentage?: number; // Calculated in action
 
-  // Calculated duration estimates
+  // Calculated duration estimates table
   durationEstimates?: DurationEstimateRow[];
 };
 
@@ -151,9 +150,7 @@ export interface ExcelDataRow {
   realEstate?: string;
   mean?: number;
   variance?: number;
-  totalUsers?: number; // Renamed from numberOfUsers to match common Excel header
+  totalUsers?: number; 
   lookbackDays?: number;
-  // Allow other dynamic keys from original file if needed, though not directly used by app logic after mapping
   [key: string]: any; 
 }
-

@@ -5,23 +5,24 @@ import { calculateSampleSize as calculateSampleSizeFlow, type CalculateAIFlowInp
 import type { MdeToSampleSizeFormValues, MdeToSampleSizeCalculationResults, SampleSizeToMdeFormValues, SampleSizeToMdeCalculationResults, DurationEstimateRow } from '@/lib/types';
 import { Z_ALPHA_DIV_2, Z_BETA, DURATION_OPTIONS_WEEKS } from '@/lib/constants';
 
-// Action for "MDE to Sample Size" flow (used by both Excel-driven and Manual calculators)
+// Action for "MDE to Sample Size" flow
 export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormValues): Promise<MdeToSampleSizeCalculationResults> {
   const { 
     metric, 
     metricType,
     mean, 
     variance, 
-    numberOfUsers, 
-    lookbackDays,  
     realEstate,    
     minimumDetectableEffect, // This is MDE % from form
     statisticalPower, 
     significanceLevel,
-    historicalDailyTraffic, 
+    historicalDailyTraffic, // This is now calculated in the form from Excel or input manually
+    targetExperimentDurationDays,
+    lookbackDays, // From excel selection, for context in report
   } = formValues;
 
   const localWarnings: string[] = [];
+  let exposureNeededPercentage: number | undefined = undefined;
 
   try {
     const aiInput: CalculateAIFlowInput = {
@@ -47,32 +48,35 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
     }
     
     let durationEstimates: DurationEstimateRow[] | undefined = undefined;
-    let dailyUsersForDurationCalc = 0;
-
-    if (historicalDailyTraffic !== undefined && historicalDailyTraffic > 0) {
-        dailyUsersForDurationCalc = historicalDailyTraffic;
-    } else if (numberOfUsers !== undefined && lookbackDays !== undefined && numberOfUsers > 0 && lookbackDays > 0) {
-        dailyUsersForDurationCalc = numberOfUsers / lookbackDays;
-    }
-
-
+    
     if (finalRequiredSampleSize === undefined || finalRequiredSampleSize <= 0) {
-      localWarnings.push("AI could not determine a valid required sample size. Duration estimates cannot be calculated.");
+      localWarnings.push("AI could not determine a valid required sample size. Exposure and duration estimates cannot be calculated.");
       finalRequiredSampleSize = undefined; 
     } else {
-        if (isNaN(dailyUsersForDurationCalc) || dailyUsersForDurationCalc <= 0) {
-            localWarnings.push("Daily user count is zero, negative, or could not be calculated. Cannot estimate test duration achievability.");
+        if (historicalDailyTraffic === undefined || isNaN(historicalDailyTraffic) || historicalDailyTraffic <= 0) {
+            localWarnings.push("Historical daily traffic is invalid or missing. Cannot calculate exposure percentage or duration estimates.");
         } else {
+            // Calculate exposure needed
+            const totalRequiredSampleSizeForExposure = finalRequiredSampleSize * 2; // Assuming 2 variants
+            const totalAvailableTrafficInTargetDuration = historicalDailyTraffic * targetExperimentDurationDays;
+
+            if (totalAvailableTrafficInTargetDuration > 0) {
+                exposureNeededPercentage = (totalRequiredSampleSizeForExposure / totalAvailableTrafficInTargetDuration) * 100;
+            } else {
+                localWarnings.push("Total available traffic for target duration is zero. Cannot calculate exposure percentage.");
+            }
+            
+            // Calculate duration estimates table (based on 100% exposure)
             durationEstimates = []; 
-            const requiredTotalSampleSize = finalRequiredSampleSize * 2; // Assuming 2 variants
+            const requiredTotalSampleSizeForTable = finalRequiredSampleSize * 2; 
 
             DURATION_OPTIONS_WEEKS.forEach(weeks => {
                 const durationInDays = weeks * 7;
-                const totalUsersAvailable = dailyUsersForDurationCalc * durationInDays;
+                const totalUsersAvailable = historicalDailyTraffic * durationInDays;
                 durationEstimates!.push({ 
                     weeks,
                     totalUsersAvailable: Math.round(totalUsersAvailable),
-                    isSufficient: totalUsersAvailable >= requiredTotalSampleSize,
+                    isSufficient: totalUsersAvailable >= requiredTotalSampleSizeForTable,
                 });
             });
             if (durationEstimates.length === 0) { 
@@ -89,17 +93,18 @@ export async function calculateSampleSizeAction(formValues: MdeToSampleSizeFormV
       powerLevel: aiResult.powerLevel !== undefined ? aiResult.powerLevel : statisticalPower,
       warnings: combinedWarnings.length > 0 ? combinedWarnings : undefined,
       durationEstimates: durationEstimates,
+      exposureNeededPercentage: exposureNeededPercentage,
       // Pass through original form values for comprehensive report
       metric,
       metricType,
       mean,
       variance,
-      numberOfUsers, 
-      lookbackDays,  
+      lookbackDays, // For report context
       realEstate,
       minimumDetectableEffect: minimumDetectableEffect / 100, // MDE as decimal
       significanceLevel,
       historicalDailyTraffic, 
+      targetExperimentDurationDays,
     };
 
   } catch (error) {
