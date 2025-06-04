@@ -274,10 +274,8 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
       <CardHeader className="flex flex-row items-start justify-between">
         <div>
             <CardTitle className="font-headline text-2xl">Sample Size to MDE Inputs</CardTitle>
-             <p className="text-muted-foreground text-xs mt-1">
-                {uploadedFileName 
-                    ? `Using data from "${uploadedFileName}".` 
-                    : 'Enter parameters or upload a data file via "Upload & Map Data" for auto-fill.'}
+            <p className="text-muted-foreground text-xs mt-1">
+                {!uploadedFileName ? 'Enter parameters or upload a data file via "Upload & Map Data" for auto-fill.' : 'Select Metric, Real Estate, and Exp Duration to auto-fill historical data.'}
             </p>
         </div>
         <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
@@ -424,7 +422,7 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
                   name="targetExperimentDurationDays"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Target Experiment Duration (days)</FormLabel>
+                      <FormLabel>Exp Duration (Days)</FormLabel>
                       <FormControl>
                         <Input type="number" placeholder="e.g., 14" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} />
                       </FormControl>
@@ -451,7 +449,7 @@ export function SampleSizeToMdeForm({ onResults, onDownload, currentResults }: S
               
               <Separator />
               <p className="text-sm font-medium text-foreground">
-                  Historical Data {isHistoricalFieldReadOnly ? `(auto-filled for ${targetExperimentDuration || form.getValues("targetExperimentDurationDays")} days lookback)` : `(manual input)`}
+                  Historical Data {isHistoricalFieldReadOnly ? `(auto-filled for ${targetExperimentDuration || form.getValues("targetExperimentDurationDays")} days)` : `(manual input)`}
               </p>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

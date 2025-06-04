@@ -44,9 +44,8 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
   
   const [availableMetrics, setAvailableMetrics] = useState<string[]>(DEFAULT_METRIC_OPTIONS);
   const [availableRealEstates, setAvailableRealEstates] = useState<string[]>(DEFAULT_REAL_ESTATE_OPTIONS);
-  const [isDataFromExcel, setIsDataFromExcel] = useState(false); 
-  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [isHistoricalFieldReadOnly, setIsHistoricalFieldReadOnly] = useState(false);
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
 
 
   const { toast } = useToast();
@@ -101,13 +100,11 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
         localStorage.removeItem('abalyticsFileName');
         setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
         setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS);
-        setIsDataFromExcel(false);
         setIsHistoricalFieldReadOnly(false);
       }
     } else {
         setAvailableMetrics(DEFAULT_METRIC_OPTIONS);
         setAvailableRealEstates(DEFAULT_REAL_ESTATE_OPTIONS);
-        setIsDataFromExcel(false);
         setIsHistoricalFieldReadOnly(false);
         if (!form.getValues("metric") && DEFAULT_METRIC_OPTIONS.length > 0) form.setValue("metric", DEFAULT_METRIC_OPTIONS[0]);
         if (DEFAULT_REAL_ESTATE_OPTIONS.length > 0 && !form.getValues("realEstate")) {
@@ -182,30 +179,27 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
 
         form.setValue("lookbackDays", matchedRow.lookbackDays || targetExperimentDuration, { shouldValidate: true }); 
         
-        setIsDataFromExcel(true); 
         setIsHistoricalFieldReadOnly(true);
         if (isUserDrivenSelectorChange && valuesActuallyChangedByAutofill) {
             onResults(null); 
         }
       } else { 
-        if(isDataFromExcel || isUserDrivenSelectorChange){ 
+        if(isHistoricalFieldReadOnly || isUserDrivenSelectorChange){ 
             form.setValue("mean", NaN);
             form.setValue("variance", NaN);
             form.setValue("totalUsersInSelectedDuration", NaN);
             form.setValue("lookbackDays", targetExperimentDuration); 
-            setIsDataFromExcel(false); 
-            setIsHistoricalFieldReadOnly(false);
+            setIsHistoricalFieldReadOnly(false); 
         }
         if (isUserDrivenSelectorChange && parsedExcelData.length > 0) { 
             onResults(null);
         }
       }
     } else if (!parsedExcelData && isUserDrivenSelectorChange) { 
-        if(isDataFromExcel) { 
+        if(isHistoricalFieldReadOnly) { 
             form.setValue("mean", NaN);
             form.setValue("variance", NaN);
             form.setValue("totalUsersInSelectedDuration", NaN);
-            setIsDataFromExcel(false);
             setIsHistoricalFieldReadOnly(false);
             onResults(null);
         }
@@ -215,7 +209,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
     prevSelectedRealEstateRef.current = selectedRealEstate;
     prevTargetExperimentDurationRef.current = targetExperimentDuration;
 
-  }, [parsedExcelData, selectedMetric, selectedRealEstate, targetExperimentDuration, form, onResults, isDataFromExcel]);
+  }, [parsedExcelData, selectedMetric, selectedRealEstate, targetExperimentDuration, form, onResults, isHistoricalFieldReadOnly]);
 
 
   useEffect(() => {
@@ -276,9 +270,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
         <div>
             <CardTitle className="font-headline text-2xl">MDE to Sample Size</CardTitle>
              <p className="text-muted-foreground text-xs mt-1">
-                {uploadedFileName 
-                    ? `Using data from "${uploadedFileName}".` 
-                    : 'Enter parameters or upload a data file via "Upload & Map Data" for auto-fill.'}
+                {!uploadedFileName ? 'Enter parameters or upload a data file via "Upload & Map Data" for auto-fill.' : 'Select Metric, Real Estate, and Exp Duration to auto-fill historical data.'}
             </p>
         </div>
         <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
@@ -411,7 +403,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   name="minimumDetectableEffect"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Minimum Detectable Effect (MDE %)</FormLabel>
+                      <FormLabel>MDE (%)</FormLabel>
                       <FormControl>
                         <Input type="number" placeholder="e.g., 0.5 for 0.5%" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} step="any"/>
                       </FormControl>
@@ -425,7 +417,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
                   name="targetExperimentDurationDays"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Target Experiment Duration (days)</FormLabel>
+                      <FormLabel>Exp Duration (Days)</FormLabel>
                       <FormControl>
                         <Input type="number" placeholder="e.g., 14" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); onResults(null);}} />
                       </FormControl>
@@ -452,7 +444,7 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
               
               <Separator />
               <p className="text-sm font-medium text-foreground">
-                  Historical Data {isHistoricalFieldReadOnly ? `(auto-filled for ${targetExperimentDuration || form.getValues("lookbackDays")} days lookback)` : `(manual input)`}
+                  Historical Data {isHistoricalFieldReadOnly ? `(auto-filled for ${targetExperimentDuration || form.getValues("lookbackDays")} days)` : `(manual input)`}
               </p>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

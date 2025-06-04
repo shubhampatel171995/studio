@@ -162,8 +162,8 @@ export function ManualCalculatorForm() {
 
   return (
     <div className="space-y-6">
-        <Form {...form}> {/* Outer FormProvider */}
-          <FormProvider {...form}> {/* Inner FormProvider to reinforce context */}
+        <Form {...form}> 
+          <FormProvider {...form}> 
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
@@ -189,7 +189,7 @@ export function ManualCalculatorForm() {
                     name="minimumDetectableEffect"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Minimum Detectable Effect (MDE %)</FormLabel>
+                        <FormLabel>MDE (%)</FormLabel>
                         <FormControl>
                           <Input type="number" placeholder="e.g., 0.5 for 0.5%" {...field} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" value={isNaN(field.value) ? '' : field.value}/>
                         </FormControl>
@@ -257,7 +257,7 @@ export function ManualCalculatorForm() {
                     name="targetExperimentDurationDays"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Target Experiment Duration (days)</FormLabel>
+                        <FormLabel>Exp Duration (Days)</FormLabel>
                         <FormControl>
                           <Input type="number" placeholder="e.g., 14" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} />
                         </FormControl>
@@ -338,7 +338,6 @@ interface ManualCalculatorResultsDisplayProps {
 export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResultsDisplayProps) {
   const dailyUsers = results.historicalDailyTraffic && results.historicalDailyTraffic > 0 ? results.historicalDailyTraffic : 0;
   const targetDurationDays = results.targetExperimentDurationDays;
-  const numberOfVariants = results.numberOfVariants || 2; 
   
   const shouldShowCard = results.requiredSampleSizePerVariant !== undefined;
 
@@ -348,11 +347,11 @@ export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResu
 
   const onlyShowWarnings = results.requiredSampleSizePerVariant === undefined && results.warnings && results.warnings.length > 0;
 
-  const totalRequiredSampleSize = results.requiredSampleSizePerVariant ? results.requiredSampleSizePerVariant * numberOfVariants : undefined;
+  const totalRequiredSampleSize = results.requiredSampleSizePerVariant ? results.requiredSampleSizePerVariant * results.numberOfVariants : undefined;
 
   let targetDurationInfo: { usersAvailable?: number; isSufficient?: boolean, exposureNeeded?: number } = {};
   if (targetDurationDays && dailyUsers > 0 && results.requiredSampleSizePerVariant && results.requiredSampleSizePerVariant > 0 && results.totalUsersInSelectedDuration) {
-    const totalRequiredForExposure = results.requiredSampleSizePerVariant * numberOfVariants;
+    const totalRequiredForExposure = results.requiredSampleSizePerVariant * results.numberOfVariants;
     targetDurationInfo.usersAvailable = results.totalUsersInSelectedDuration;
     targetDurationInfo.isSufficient = targetDurationInfo.usersAvailable >= totalRequiredForExposure;
     if(targetDurationInfo.usersAvailable > 0) {
