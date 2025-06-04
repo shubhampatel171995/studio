@@ -148,7 +148,7 @@ export function ExcelDataUploader() {
         setIsLoading(false);
       }
     };
-    reader.onerror = () = setIsLoading(false);
+    reader.onerror = () => setIsLoading(false);
     reader.readAsArrayBuffer(file);
   };
 
