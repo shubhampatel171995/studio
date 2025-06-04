@@ -2,10 +2,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, FormProvider } from "react-hook-form"; // Added FormProvider
 import { Button } from "@/components/ui/button";
 import {
-  Form,
+  Form, // This is already a FormProvider from ShadCN
   FormControl,
   FormDescription,
   FormField,
@@ -81,7 +81,7 @@ export function ManualCalculatorForm() {
         significanceLevel: values.significanceLevel,
         numberOfVariants: values.numberOfVariants,
         // For manual calculator, totalUsersInSelectedDuration is calculated from daily traffic and duration
-        totalUsersInSelectedDuration: values.historicalDailyTraffic * values.targetExperimentDurationDays,
+        totalUsersInSelectedDuration: (values.historicalDailyTraffic ?? 0) * values.targetExperimentDurationDays,
         targetExperimentDurationDays: values.targetExperimentDurationDays,
         lookbackDays: values.targetExperimentDurationDays, 
         realEstate: "Manual Input", 
@@ -98,10 +98,11 @@ export function ManualCalculatorForm() {
         minimumDetectableEffect: values.minimumDetectableEffect / 100, 
         significanceLevel: values.significanceLevel,
         numberOfVariants: values.numberOfVariants,
-        totalUsersInSelectedDuration: values.historicalDailyTraffic * values.targetExperimentDurationDays,
+        totalUsersInSelectedDuration: (values.historicalDailyTraffic ?? 0) * values.targetExperimentDurationDays,
         targetExperimentDurationDays: values.targetExperimentDurationDays,
         lookbackDays: values.targetExperimentDurationDays,
         realEstate: "Manual Input",
+        historicalDailyTraffic: values.historicalDailyTraffic,
       };
       
       setResults(augmentedResult);
@@ -145,8 +146,9 @@ export function ManualCalculatorForm() {
           metricType: form.getValues("metricType"), 
           targetExperimentDurationDays: form.getValues("targetExperimentDurationDays"),
           numberOfVariants: form.getValues("numberOfVariants"),
+          historicalDailyTraffic: form.getValues("historicalDailyTraffic"),
           // Pass the derived total users for consistency in reporting
-          totalUsersInSelectedDuration: form.getValues("historicalDailyTraffic") * form.getValues("targetExperimentDurationDays"),
+          totalUsersInSelectedDuration: (form.getValues("historicalDailyTraffic") ?? 0) * form.getValues("targetExperimentDurationDays"),
       };
       downloadManualCalculatorReport(reportData);
     } else {
@@ -160,166 +162,168 @@ export function ManualCalculatorForm() {
 
   return (
     <div className="space-y-6">
-        <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-                control={form.control}
-                name="metricType"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Metric Type</FormLabel>
-                    <Select onValueChange={(value) => { field.onChange(value); setResults(null); form.setValue('variance', NaN); }} defaultValue={field.value}>
-                    <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {METRIC_TYPE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-             <FormField
-                control={form.control}
-                name="minimumDetectableEffect"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Minimum Detectable Effect (MDE %)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="e.g., 0.5 for 0.5%" {...field} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" value={isNaN(field.value) ? '' : field.value}/>
-                    </FormControl>
-                    <FormDescription className="text-xs">Enter as a percentage, e.g., 0.5 for 0.5%.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+        <Form {...form}> {/* Outer FormProvider */}
+          <FormProvider {...form}> {/* Inner FormProvider to reinforce context */}
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                    control={form.control}
+                    name="metricType"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Metric Type</FormLabel>
+                        <Select onValueChange={(value) => { field.onChange(value); setResults(null); form.setValue('variance', NaN); }} defaultValue={field.value}>
+                        <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Select metric type" /></SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            {METRIC_TYPE_OPTIONS.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                        </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                 <FormField
+                    control={form.control}
+                    name="minimumDetectableEffect"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Minimum Detectable Effect (MDE %)</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="e.g., 0.5 for 0.5%" {...field} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" value={isNaN(field.value) ? '' : field.value}/>
+                        </FormControl>
+                        <FormDescription className="text-xs">Enter as a percentage, e.g., 0.5 for 0.5%.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-            <Separator />
-            <p className="text-sm text-muted-foreground">Enter metric parameters:</p>
+                <Separator />
+                <p className="text-sm text-muted-foreground">Enter metric parameters:</p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-                control={form.control}
-                name="mean"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Mean (Baseline Value / Proportion)</FormLabel>
-                    <FormControl>
-                    <Input type="number" placeholder={metricType === 'Binary' ? "e.g., 0.1 for 10%" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" />
-                    </FormControl>
-                    <FormDescription className="text-xs">{metricType === 'Binary' ? "For binary, enter proportion (0-1)." : "Baseline average."}</FormDescription>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="variance"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Variance</FormLabel>
-                    <FormControl>
-                    <Input type="number" placeholder="e.g., 0.09" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" readOnly={metricType === 'Binary' && !isNaN(mean) && mean >=0 && mean <=1}/>
-                    </FormControl>
-                    <FormDescription className="text-xs">{metricType === 'Binary' ? "Auto-calculated as p*(1-p) if Mean is valid proportion. Editable." : "Enter metric variance."}</FormDescription>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                    control={form.control}
+                    name="mean"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Mean (Baseline Value / Proportion)</FormLabel>
+                        <FormControl>
+                        <Input type="number" placeholder={metricType === 'Binary' ? "e.g., 0.1 for 10%" : "e.g., 150"} {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" />
+                        </FormControl>
+                        <FormDescription className="text-xs">{metricType === 'Binary' ? "For binary, enter proportion (0-1)." : "Baseline average."}</FormDescription>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="variance"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Variance</FormLabel>
+                        <FormControl>
+                        <Input type="number" placeholder="e.g., 0.09" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="any" readOnly={metricType === 'Binary' && !isNaN(mean) && mean >=0 && mean <=1}/>
+                        </FormControl>
+                        <FormDescription className="text-xs">{metricType === 'Binary' ? "Auto-calculated as p*(1-p) if Mean is valid proportion. Editable." : "Enter metric variance."}</FormDescription>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                </div>
 
-            <Separator />
-            <p className="text-sm text-muted-foreground">Enter traffic, duration and variant parameters:</p>
+                <Separator />
+                <p className="text-sm text-muted-foreground">Enter traffic, duration and variant parameters:</p>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-             <FormField
-                control={form.control}
-                name="historicalDailyTraffic"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Historical Daily Traffic</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="e.g., 5000" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} />
-                    </FormControl>
-                    <FormDescription className="text-xs">Average daily users for traffic estimates.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="targetExperimentDurationDays"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Target Experiment Duration (days)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="e.g., 14" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} />
-                    </FormControl>
-                     <FormDescription className="text-xs">How long you plan to run the experiment.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="numberOfVariants"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Number of Variants</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} />
-                    </FormControl>
-                     <FormDescription className="text-xs">Total variants including control (min 2).</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 <FormField
+                    control={form.control}
+                    name="historicalDailyTraffic"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Historical Daily Traffic</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="e.g., 5000" {...field} value={isNaN(field.value ?? NaN) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} />
+                        </FormControl>
+                        <FormDescription className="text-xs">Average daily users for traffic estimates.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="targetExperimentDurationDays"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Target Experiment Duration (days)</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="e.g., 14" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} />
+                        </FormControl>
+                         <FormDescription className="text-xs">How long you plan to run the experiment.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="numberOfVariants"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Number of Variants</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="e.g., 2" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} />
+                        </FormControl>
+                         <FormDescription className="text-xs">Total variants including control (min 2).</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-            <Separator />
-            <p className="text-sm text-muted-foreground">Adjust statistical parameters if needed:</p>
+                <Separator />
+                <p className="text-sm text-muted-foreground">Adjust statistical parameters if needed:</p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-                control={form.control}
-                name="statisticalPower"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Statistical Power (1 - β)</FormLabel>
-                    <FormControl>
-                    <Input type="number" placeholder="e.g., 0.8" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="0.01" min="0.01" max="0.99" />
-                    </FormControl>
-                    <FormDescription className="text-xs">Typically 0.8 (80%). Value between 0.01 and 0.99.</FormDescription>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="significanceLevel"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Significance Level (α)</FormLabel>
-                    <FormControl>
-                    <Input type="number" placeholder="e.g., 0.05" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="0.01" min="0.01" max="0.99" />
-                    </FormControl>
-                    <FormDescription className="text-xs">Typically 0.05 (5%). Value between 0.01 and 0.99.</FormDescription>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-4 pt-4">
-            <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Calculate Sample Size
-            </Button>
-            </div>
-        </form>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                    control={form.control}
+                    name="statisticalPower"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Statistical Power (1 - β)</FormLabel>
+                        <FormControl>
+                        <Input type="number" placeholder="e.g., 0.8" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="0.01" min="0.01" max="0.99" />
+                        </FormControl>
+                        <FormDescription className="text-xs">Typically 0.8 (80%). Value between 0.01 and 0.99.</FormDescription>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="significanceLevel"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Significance Level (α)</FormLabel>
+                        <FormControl>
+                        <Input type="number" placeholder="e.g., 0.05" {...field} value={isNaN(field.value) ? '' : field.value} onChange={(e) => {field.onChange(Number(e.target.value)); setResults(null);}} step="0.01" min="0.01" max="0.99" />
+                        </FormControl>
+                        <FormDescription className="text-xs">Typically 0.05 (5%). Value between 0.01 and 0.99.</FormDescription>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Calculate Sample Size
+                </Button>
+                </div>
+            </form>
+          </FormProvider>
         </Form>
 
         {results && <ManualCalculatorResultsDisplay results={results} />}
@@ -332,11 +336,11 @@ interface ManualCalculatorResultsDisplayProps {
 }
 
 export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResultsDisplayProps) {
-  const dailyUsers = results.totalUsersInSelectedDuration && results.targetExperimentDurationDays ? results.totalUsersInSelectedDuration / results.targetExperimentDurationDays : 0;
+  const dailyUsers = results.historicalDailyTraffic && results.historicalDailyTraffic > 0 ? results.historicalDailyTraffic : 0;
   const targetDurationDays = results.targetExperimentDurationDays;
   const numberOfVariants = results.numberOfVariants || 2; 
   
-  const shouldShowCard = results.requiredSampleSizePerVariant !== undefined || (results.warnings && results.warnings.length > 0);
+  const shouldShowCard = results.requiredSampleSizePerVariant !== undefined;
 
   if (!shouldShowCard && (!results.warnings || results.warnings.length === 0)) {
      return null; 
@@ -352,7 +356,7 @@ export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResu
     targetDurationInfo.usersAvailable = results.totalUsersInSelectedDuration;
     targetDurationInfo.isSufficient = targetDurationInfo.usersAvailable >= totalRequiredForExposure;
     if(targetDurationInfo.usersAvailable > 0) {
-        targetDurationInfo.exposureNeeded = (totalRequiredForExposure / targetDurationInfo.usersAvailable) * 100;
+        targetDurationInfo.exposureNeeded = results.exposureNeededPercentage;
     }
   }
 
@@ -363,9 +367,17 @@ export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResu
         <CardTitle className="font-headline text-2xl">Results</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {onlyShowWarnings && (
+        {onlyShowWarnings && results.warnings && (
              <div className="mt-4">
-               {/* Warnings section removed as per request */}
+              <h3 className="font-medium text-lg flex items-center text-destructive">
+                <AlertTriangle className="mr-2 h-5 w-5" />
+                Notices
+              </h3>
+              <ul className="list-disc list-inside space-y-1 pl-2 text-destructive bg-destructive/10 p-3 rounded-md">
+                {results.warnings.map((warning, index) => (
+                  <li key={index} className="text-sm">{warning.replace(/_/g, ' ')}</li>
+                ))}
+              </ul>
             </div>
         )}
         {!onlyShowWarnings && results.requiredSampleSizePerVariant === undefined && (!results.warnings || results.warnings.length === 0) && (
@@ -379,7 +391,7 @@ export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResu
             </div>
              {totalRequiredSampleSize !== undefined && (
                 <div>
-                    <p className="font-medium text-muted-foreground">Total Required Sample Size ({numberOfVariants} variants)</p>
+                    <p className="font-medium text-muted-foreground">Total Required Sample Size</p>
                     <p className="text-2xl font-semibold text-primary">{totalRequiredSampleSize.toLocaleString()}</p>
                 </div>
             )}
@@ -389,7 +401,7 @@ export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResu
                     <p className="text-2xl font-semibold text-primary">
                         {results.exposureNeededPercentage >=0 && results.exposureNeededPercentage <= 1000 ? `${results.exposureNeededPercentage.toFixed(1)}%` : results.exposureNeededPercentage > 1000 ? '>1000%' : 'N/A'}
                     </p>
-                     <p className="text-xs text-muted-foreground">(Based on ~{Math.round(dailyUsers).toLocaleString()} daily users for {numberOfVariants} variants)</p>
+                     <p className="text-xs text-muted-foreground">(Based on ~{Math.round(dailyUsers).toLocaleString()} daily users)</p>
                 </div>
             )}
             </div>
@@ -400,9 +412,9 @@ export function ManualCalculatorResultsDisplay({ results }: ManualCalculatorResu
                                  targetDurationInfo.isSufficient ? "bg-green-100 text-green-800 border border-green-200" : "bg-red-100 text-red-800 border border-red-200")}>
                     <h4 className="font-semibold mb-1">For your Target Duration of {targetDurationDays} days:</h4>
                     <p>Estimated total available users: <strong>{Math.round(targetDurationInfo.usersAvailable).toLocaleString()}</strong>.</p>
-                    <p>This is {targetDurationInfo.isSufficient ? <strong className="font-semibold">sufficient</strong> : <strong className="font-semibold">not sufficient</strong>} for the total required sample size of {totalRequiredSampleSize.toLocaleString()} ({numberOfVariants} variants).</p>
+                    <p>This is {targetDurationInfo.isSufficient ? <strong className="font-semibold">sufficient</strong> : <strong className="font-semibold">not sufficient</strong>} for the total required sample size of {totalRequiredSampleSize.toLocaleString()}.</p>
                     {targetDurationInfo.exposureNeeded !== undefined && (
-                        <p>Required exposure of traffic: <strong>{targetDurationInfo.exposureNeeded >=0 && targetDurationInfo.exposureNeeded <= 1000 ? `${targetDurationInfo.exposureNeeded.toFixed(1)}%` : targetDurationInfo.exposureNeeded > 1000 ? '>1000%' : 'N/A'}</strong>.</p>
+                        <p>Required exposure of traffic: <strong className="text-primary">{targetDurationInfo.exposureNeeded >=0 && targetDurationInfo.exposureNeeded <= 1000 ? `${targetDurationInfo.exposureNeeded.toFixed(1)}%` : targetDurationInfo.exposureNeeded > 1000 ? '>1000%' : 'N/A'}</strong>.</p>
                     )}
                 </div>
             )}
