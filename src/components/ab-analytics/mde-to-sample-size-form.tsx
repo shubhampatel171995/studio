@@ -356,8 +356,8 @@ export function MdeToSampleSizeForm({ onResults, onDownload, currentResults }: M
               }
             </p>
             {isHistoricalFieldReadOnly && autoFilledTotalUsersForPeriod !== null && (
-                <div className="p-3 bg-accent/10 rounded-md text-sm text-accent-foreground flex items-center gap-2">
-                    <Info className="h-5 w-5 text-accent" />
+                <div className="p-3 bg-accent/10 rounded-md text-sm text-accent flex items-center gap-2">
+                    <Info className="h-5 w-5" />
                     Using data from your file for {targetExperimentDuration} days lookback. Total users for this period: {autoFilledTotalUsersForPeriod.toLocaleString()}. Mean, Variance, and Total Users for Duration also auto-filled.
                 </div>
             )}
@@ -577,3 +577,4 @@ export function MdeToSampleSizeResultsDisplay({ results }: { results: MdeToSampl
     </Card>
   );
 }
+
