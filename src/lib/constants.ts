@@ -28,5 +28,15 @@ export const REAL_ESTATE_OPTIONS = [
   "homepage",
   "platform"
 ];
-export const METRIC_OPTIONS = ["Conversion Rate (Orders/Visitors)", "Average Order Value (AOV)", "Click-Through Rate (CTR)", "Add to Cart Rate"];
-
+export const METRIC_OPTIONS = [
+  "total__orders_by_visitor",
+  "total__mall_orders_by_visitor",
+  "total__high_asp_orders_by_visitor",
+  "total__gold_orders_by_visitor",
+  "total__gmv_capped",
+  "total__log_gmv_visitor",
+  "total__mall_gmv_visitor",
+  "total__high_asp_gmv_visitor",
+  "total__gold_gmv_visitor",
+  "total__log_mall_gmv_visitor"
+];
