@@ -1,3 +1,4 @@
+'use client';
 
 import { MdeDurationPredictorForm } from '@/components/ab-analytics/mde-duration-predictor-form';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
